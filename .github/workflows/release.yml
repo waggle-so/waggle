@@ -62,6 +62,10 @@ jobs:
           if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
             echo "error: tag v$VERSION already exists." >&2; exit 1
           fi
+          # Fail in a minute, not after a 60-minute build, when the release is already out.
+          if gh release view "v$VERSION" --repo limone-eth/waggle-releases >/dev/null 2>&1; then
+            echo "error: release v$VERSION already exists in waggle-releases. Set main to $VERSION and tag it." >&2; exit 1
+          fi
           # Notes: docs/release-notes/<version>.md wins (release.sh reads it); else the PR title.
           if [ ! -f "docs/release-notes/$VERSION.md" ]; then
             if [ -n "$PR" ]; then
@@ -130,8 +134,15 @@ jobs:
           # with [skip ci] so it starts no CI run and so no second release.
           git add daemon/package.json apps/macos/Resources/BuildNumber
           git commit -m "Release v$VERSION [skip ci]"
-          git push origin HEAD:main
+          # Push the tag first. It marks this version as released, also when the bump push fails.
           git push origin "v$VERSION"
+          # main moves when a PR merges during the build. Rebase the bump onto the new main and
+          # push again, so the next run does not compute this version a second time.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git pull --rebase origin main
+          done
+          echo "error: could not push the v$VERSION bump to main. Set main to $VERSION by hand." >&2; exit 1
 
       - name: Clean up keys
         if: always()
