@@ -64,6 +64,9 @@ bash scripts/bundle-app.sh                     # wraps the app in apps/macos/.bu
 - Tests that wait for something poll with a deadline. Do not assert after a fixed sleep: the full suites
   run in parallel and a loaded runner is slow.
 - Small commits with clear messages. Do not push or merge unless the human asks.
+- Every commit is signed: `main` refuses unsigned ones. Do not pass `--no-gpg-sign` or `-c commit.gpgsign=false`.
+  If `git config commit.gpgsign` is not `true`, tell the human before you commit and point to
+  CONTRIBUTING.md (Sign your commits). Do not set up a key for them.
 
 ## Names
 
