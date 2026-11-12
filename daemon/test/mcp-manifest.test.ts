@@ -184,6 +184,48 @@ describe("open input schemas (HAIL-48 amendment A1)", () => {
   });
 });
 
+describe("tool annotations", () => {
+  const HINTS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"] as const;
+
+  test("every tool, alias included, sets all four hints to a boolean", () => {
+    for (const tool of MCP_TOOLS) {
+      for (const hint of HINTS) expect(typeof tool.annotations?.[hint]).toBe("boolean");
+    }
+  });
+
+  test("each tool's hints match what its handler does", () => {
+    const of = (name: string) => MCP_TOOLS.find((t) => t.name === name)?.annotations;
+    expect(of("waggle_ask")).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+    expect(of("waggle_update")).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+    for (const name of ["waggle_check", "waggle_guide"]) {
+      expect(of(name)).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    }
+    for (const name of ["waggle_settings", "waggle_themes"]) {
+      expect(of(name)).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    }
+  });
+
+  test("tools/list relays the hints, and lists a tool without them when an old daemon sends none", async () => {
+    const { home, cwd, store, socketPath } = setup();
+    const oldTools: McpManifestTool[] = MCP_TOOLS.map(({ annotations: _, ...t }) => t);
+    startDaemon({ socketPath, store }, { version: V_B, mcpManifestTools: oldTools });
+    const { client } = await startShim(home, "sess-a", cwd);
+    const listed = await client.listTools();
+    expect(listed.tools.find((t) => t.name === "waggle_ask")?.annotations).toBeUndefined();
+  });
+
+  test("tools/list relays the hints of the live manifest", async () => {
+    const { home, cwd, store, socketPath } = setup();
+    startDaemon({ socketPath, store }, { version: V_B });
+    const { client } = await startShim(home, "sess-a", cwd);
+    const listed = await client.listTools();
+    for (const tool of listed.tools) {
+      const expected = MCP_TOOLS.find((t) => t.name === tool.name)!.annotations;
+      expect(tool.annotations).toEqual(expected);
+    }
+  });
+});
+
 describe("guide.get (socket RPC)", () => {
   test("returns the topic index with no topic, and one guide's text with a topic", async () => {
     const { store, socketPath } = setup();

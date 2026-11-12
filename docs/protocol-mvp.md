@@ -99,7 +99,7 @@ that lives in the tool descriptions and `waggle_guide` below, both served live.
 
 The shim is a thin relay: the daemon is the only place that knows the current tool names,
 descriptions and input schemas, and the only validator of a call's input. `mcp.manifest` (no params)
-returns `{ daemon_version, tools: [{ name, description, inputSchema }] }` - `daemon_version` is the
+returns `{ daemon_version, tools: [{ name, description, inputSchema, annotations }] }` - `daemon_version` is the
 same string `service.status` reports; `tools` is built once, at daemon startup, from the same Zod
 schemas (`KnockAskInput` and its siblings) that already validate `case.create` and friends
 (`daemon/src/protocol/mcp.ts` `MCP_TOOLS`), so the manifest and the validation it describes can never
@@ -108,6 +108,14 @@ client as-is in `tools/list` and never validates a call against it - a bad field
 daemon's own `-32602 Invalid params`, with the same per-field message text `case.create` etc. have
 always returned (`daemon/src/mcp/client.ts` `DaemonRpcError` folds `error.data.issues` into that
 text).
+
+`annotations` (additive, 2026-11-12) holds the four MCP tool hints, each an explicit boolean:
+`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. The shim relays them in `tools/list`.
+`waggle_check` and `waggle_guide` are read-only and idempotent. `waggle_settings` and `waggle_themes` write
+and are idempotent. `waggle_ask` and `waggle_update` write, are not idempotent, and are open-world, because an
+opt-in connector (Telegram, Slack) can send them to the human. No tool is destructive. A knock_* alias has the
+hints of its waggle_* tool. A manifest from an older daemon has no `annotations`; the shim then lists the tools
+without them.
 
 Reconnects (HAIL-63): the shim does not wait for a tool call to reconnect. When its connection
 closes, it retries a plain connect in the background (2 s for 30 s, then 15 s; never starting a
@@ -1299,7 +1307,7 @@ App and CLI methods:
 | `usage.summary` | `{ days? }` | `UsageSummaryResult` (HAIL-195) |
 | `usage.export` | `{ path }` | `{ json_path, csv_path, tool_calls, usage_events, notes }` (HAIL-195, WAG-366) |
 | `usage.control` | `{ record?, transcript?, export_text?, delete? }` | `{ record, transcript, export_text, retention_days, tool_calls, usage_events, deleted }` (HAIL-195, WAG-366) |
-| `mcp.manifest` | `{}` | `{ daemon_version, tools: [{ name, description, inputSchema }] }` (HAIL-48, see "Live tool manifest" above) |
+| `mcp.manifest` | `{}` | `{ daemon_version, tools: [{ name, description, inputSchema, annotations }] }` (HAIL-48, see "Live tool manifest" above) |
 | `guide.get` | `{ topic? }` | `{ text }` (HAIL-48; same content and unknown-topic message as `waggle_guide`) |
 | `settings.get` | `{ key }`, `key` = `artifactPreset` \| `askTopics` \| `askFrequency` \| `askDetail` \| `askReach` \| `askWords` \| `askLearn` \| `askAfterDecide` \| `askText` | `{ key, value }`; defaults when unset (HAIL-100 "Artifact preset", HAIL-101 "Ask preferences", HAIL-140 "Ask words") |
 | `settings.set` | `{ key, value }` for any key but `askText` | `{ key, value }`; any other key or value is `-32602` (HAIL-100, HAIL-101, HAIL-140) |
