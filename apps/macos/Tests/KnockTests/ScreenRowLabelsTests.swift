@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import Knock
 
@@ -39,5 +40,19 @@ import Testing
     @Test func wordIsNotAVariant() {
         #expect(badges(["Legend", "Avviso"]) == [nil, nil])
         #expect(ScreenRowLabels.variantLetter("Avviso") == nil)
+    }
+
+    @MainActor @Test func galleryLabelsFollowTheDecisionGroup() {
+        let store = CommentsSessionStore()
+        let captions: [String?] = ["A · uno", "A · due", "B · tre", "Legenda"]
+        let images = captions.map { (image: NSImage(size: NSSize(width: 10, height: 10)), caption: $0) }
+        let records = store.addScreenshotsCaptures(images: images, revision: 1)
+        store.setScreenItems(["d1", "d1", "d1", nil])
+        store.showDecisionGroup([0, 1, 3])
+        let labels = store.galleryLabels
+        #expect(labels.map(\.badge) == ["A1", "A2", nil])
+        #expect(labels.map(\.isShared) == [false, false, true])
+        store.selectCapture(id: records[1].id)
+        #expect(store.currentLabel?.badge == "A2")
     }
 }

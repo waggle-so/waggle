@@ -143,6 +143,20 @@ final class CommentsSessionStore: ObservableObject {
         return group.isEmpty ? all : group
     }
 
+    /// The label of each screen in `galleryScreens`, in order: its variant badge ("A2") and whether it is shared.
+    var galleryLabels: [ScreenRowLabel] {
+        let gallery = galleryScreens
+        return ScreenRowLabels.labels(
+            captions: gallery.map { captionsByCaptureId[$0.id] },
+            items: gallery.map { itemsByCaptureId[$0.id] })
+    }
+
+    /// The label of the screen on show, when it is in the gallery.
+    var currentLabel: ScreenRowLabel? {
+        guard let id = currentCapture?.id, let index = galleryScreens.firstIndex(where: { $0.id == id }) else { return nil }
+        return galleryLabels[index]
+    }
+
     /// The decision on screen shows only `indexes` (0-based, in `screens`); `nil` shows every screen.
     func showDecisionGroup(_ indexes: [Int]?) {
         let all = screens
