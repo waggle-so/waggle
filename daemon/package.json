@@ -1,6 +1,6 @@
 {
   "name": "waggle",
-  "version": "0.2.70",
+  "version": "0.2.71",
   "private": true,
   "type": "module",
   "description": "Waggle daemon: local inbox where coding agents ask a human for decisions.",
