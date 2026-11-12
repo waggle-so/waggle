@@ -39,4 +39,14 @@ enum ScreenRowLabels {
         guard rest.first.map(separators.contains) ?? true else { return nil }
         return Character(first.uppercased())
     }
+
+    /// The caption without its variant letter ("C · Riepilogo" → "Riepilogo"); nil when nothing is left.
+    static func title(caption: String?) -> String? {
+        guard let caption else { return nil }
+        guard variantLetter(caption) != nil else { return caption }
+        let rest = caption.trimmingCharacters(in: .whitespaces).dropFirst()
+            .drop { $0.isASCII && $0.isNumber }
+            .drop { separators.contains($0) }
+        return rest.isEmpty ? nil : String(rest)
+    }
 }

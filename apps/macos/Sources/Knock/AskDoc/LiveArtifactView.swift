@@ -688,6 +688,9 @@ struct LiveArtifactBoxView: View {
                 ArtifactTabLabel(symbol: Self.symbol(tab.kind), title: Self.caption(tab), isOn: true)
                     .help(tab.title)
             }
+            if model.selectedTab?.kind == .screenshots, let store = model.commentsStore {
+                ScreenTitleLabel(store: store)
+            }
             if fillsHeight, let meta = versionLine {
                 Text(meta)
                     .knockTextStyle(Theme.AskDoc.Chrome.version)

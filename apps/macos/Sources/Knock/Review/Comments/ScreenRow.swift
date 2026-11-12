@@ -131,3 +131,26 @@ struct ScreenRow: View {
         .accessibilityLabel(label)
     }
 }
+
+/// The title of the screen on show, for the header of the box and of full size: a 1 pt line, the variant badge in
+/// bold, then the caption without its letter ("C2 Riepilogo dopo la sync…"). "Screen N" for a screen with no caption.
+struct ScreenTitleLabel: View {
+    @ObservedObject var store: CommentsSessionStore
+
+    var body: some View {
+        if store.isScreenshotsCase, let capture = store.currentCapture {
+            let label = store.currentLabel
+            let caption = label?.badge == nil ? store.screenTitle(for: capture)
+                : ScreenRowLabels.title(caption: store.captionsByCaptureId[capture.id])
+            HStack(spacing: 8) {
+                Rectangle().fill(Theme.Colors.line2).frame(width: 1, height: 14)
+                (Text(label?.badge.map { "\($0) " } ?? "").fontWeight(.bold).foregroundColor(Theme.Colors.ink)
+                    + Text(caption ?? "").foregroundColor(Theme.Colors.ink2))
+                    .font(.system(size: 12))
+                    .lineLimit(1).truncationMode(.tail)
+            }
+            .layoutPriority(-1)
+            .help(store.screenTitle(for: capture))
+        }
+    }
+}

@@ -577,6 +577,57 @@ async function shotSet(): Promise<void> {
   client.close();
 }
 
+// Decision record 2026-11-12: one decision whose variants have several screens (A1 A2 B C1 C2 C3), plus a
+// shared legend, for the compact screen row.
+const VARIANT_SET_ITEMS: { name: string; caption: string; rgb: [number, number, number] }[] = [
+  { name: "a1.png", caption: "A · Riga nel pannello di verifica", rgb: [0xfc, 0xee, 0xc4] },
+  { name: "a2.png", caption: "A · Dopo il clic: conferma della chiusura", rgb: [0xf9, 0xe2, 0xa8] },
+  { name: "b.png", caption: "B · Avviso in cima alla procedura", rgb: [0xe7, 0xf5, 0xec] },
+  { name: "c1.png", caption: "C · Elenco delle procedure", rgb: [0xe7, 0xec, 0xfd] },
+  { name: "c2.png", caption: "C · Riepilogo dopo la sync, con l'avviso in cima", rgb: [0xd8, 0xe0, 0xfb] },
+  { name: "c3.png", caption: "C · Dettaglio della procedura", rgb: [0xc9, 0xd4, 0xf8] },
+  { name: "legend.png", caption: "Legenda dei colori", rgb: [0xf3, 0xf3, 0xf3] },
+];
+
+async function variantSet(): Promise<void> {
+  const client = new DaemonClient();
+  await client.connect(daemonPaths().socket);
+  const root = mkdtempSync(join(tmpdir(), "knock-evidence-"));
+  const cwd = join(root, "Waggle");
+  const shotsDir = join(cwd, "shots");
+  mkdirSync(shotsDir, { recursive: true });
+  for (const item of VARIANT_SET_ITEMS) writeFileSync(join(shotsDir, item.name), landmarkPng(1440, 900, item.rgb));
+  await client.call(
+    "session.hello",
+    { session_id: randomUUID(), cwd, branch: "Waggle test", git_root: null, parent_pid: process.pid },
+    5000,
+  );
+  const staged = stageScreenshots({
+    items: VARIANT_SET_ITEMS.map((item) => ({ path: join("shots", item.name), caption: item.caption })),
+    cwd,
+    incomingDir: join(daemonPaths().home, "incoming"),
+  });
+  const created = (await client.call(
+    "case.create",
+    {
+      ...SCREENSHOTS_FIXTURE,
+      title: "Come segnaliamo una procedura chiusa per errore?",
+      options: [
+        { id: "a", title: "Riga nel pannello", label: "Una riga nel pannello di verifica." },
+        { id: "b", title: "Avviso in cima", label: "Un avviso in cima alla procedura." },
+        { id: "c", title: "Riepilogo dopo la sync", label: "Un riepilogo dopo la sync." },
+      ],
+      recommendation: "a",
+      artifact: { type: "screenshots", items: staged.items },
+    },
+    15000,
+  )) as { id: string };
+  console.log(`CASE_VARIANT_SET=${created.id}`);
+  console.log("VARIANTSET_READY=1");
+  await new Promise<void>((resolve) => process.on("SIGTERM", () => resolve()));
+  client.close();
+}
+
 // --- HAIL-55: the "preview never spins forever" repro bundles ---
 //
 // The operator's report (29 Sep, Waggle 0.1.21): an omea-group review ask
@@ -3576,6 +3627,8 @@ if (cmd === "headlessBusy") {
   await onePage(arg);
 } else if (cmd === "shotSet") {
   await shotSet();
+} else if (cmd === "variantSet") {
+  await variantSet();
 } else if (cmd === "decision") {
   await decision();
 } else if (cmd === "decisionNoTitle") {
@@ -3610,6 +3663,6 @@ if (cmd === "headlessBusy") {
 } else if (cmd === "replace" && arg) {
   await replace(arg);
 } else {
-  console.error("usage: evidence-harness.ts setup | steps | diagram | reproBundle <dir> | caughtUp [zero] | tallPage | previews | sessions | sessionContext | sessionAsks [text|prototype] | paneAsks [text|plain|prototype|fresh] | manySessions | waitCount | updates | answered | orbs [extra] | bigBundles | timeoutFallback | shotSet | onePage | nudge | doneUpdate | decision | detailQuestion | detailFormat | updateOptions | multiSelect | multiSelectRoundTrip <log path> | compareDemo [screenshot|screenshots|first] | revisionUpdate [screenshots|screenshot|bundle|markdown|commented|noArtifact] | replace <reply_id> | planAsk <questions|approaches|design|spec|all|mixed-questions|mixed-approaches|mixed-design|mixed-spec>");
+  console.error("usage: evidence-harness.ts setup | steps | diagram | reproBundle <dir> | caughtUp [zero] | tallPage | previews | sessions | sessionContext | sessionAsks [text|prototype] | paneAsks [text|plain|prototype|fresh] | manySessions | waitCount | updates | answered | orbs [extra] | bigBundles | timeoutFallback | shotSet | variantSet | onePage | nudge | doneUpdate | decision | detailQuestion | detailFormat | updateOptions | multiSelect | multiSelectRoundTrip <log path> | compareDemo [screenshot|screenshots|first] | revisionUpdate [screenshots|screenshot|bundle|markdown|commented|noArtifact] | replace <reply_id> | planAsk <questions|approaches|design|spec|all|mixed-questions|mixed-approaches|mixed-design|mixed-spec>");
   process.exit(2);
 }

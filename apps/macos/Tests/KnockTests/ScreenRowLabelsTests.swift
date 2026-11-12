@@ -42,6 +42,14 @@ import Testing
         #expect(ScreenRowLabels.variantLetter("Avviso") == nil)
     }
 
+    @Test func theTitleDropsTheLetterOfTheCaption() {
+        #expect(ScreenRowLabels.title(caption: "C · Riepilogo dopo la sync") == "Riepilogo dopo la sync")
+        #expect(ScreenRowLabels.title(caption: "A2: Conferma") == "Conferma")
+        #expect(ScreenRowLabels.title(caption: "Avviso in cima") == "Avviso in cima")
+        #expect(ScreenRowLabels.title(caption: "B") == nil)
+        #expect(ScreenRowLabels.title(caption: nil) == nil)
+    }
+
     @MainActor @Test func galleryLabelsFollowTheDecisionGroup() {
         let store = CommentsSessionStore()
         let captions: [String?] = ["A · uno", "A · due", "B · tre", "Legenda"]

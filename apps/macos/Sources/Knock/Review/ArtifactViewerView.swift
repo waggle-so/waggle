@@ -138,7 +138,7 @@ struct ArtifactViewerView: View {
                     .overlay(alignment: .bottom) {
                         if showsCanvasToolbar, !isSetView {
                             canvasToolbar
-                                .padding(.bottom, Self.toolbarBottomGap + (isScreenshots ? ScreenshotFilmstrip.height : 0))
+                                .padding(.bottom, Self.toolbarBottomGap)
                         }
                     }
             }
@@ -580,6 +580,9 @@ struct ArtifactViewerView: View {
                 .foregroundColor(Theme.Colors.ink2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
+            if isScreenshots, !isSetView {
+                ScreenTitleLabel(store: viewModel.commentsStore)
+            }
             if let mark = newMarkRevision, mark == artifactState.revision {
                 Text("new")
                     .knockTextStyle(Theme.Typography.chipLabel11_5w600)
@@ -859,13 +862,16 @@ struct ArtifactViewerView: View {
                     .padding(EdgeInsets(top: 20, leading: 28, bottom: 12, trailing: 28))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
+                    if viewModel.commentsStore.galleryScreens.count > 1 {
+                        ScreenRow(
+                            store: viewModel.commentsStore,
+                            current: viewModel.commentsStore.currentCapture?.id,
+                            onSelect: { viewModel.selectScreen(id: $0) },
+                            onStep: { viewModel.stepScreen(by: $0) }
+                        )
+                    }
                     stageContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    ScreenshotFilmstrip(
-                        store: viewModel.commentsStore,
-                        onSelect: { viewModel.selectScreen(id: $0) },
-                        onStep: { viewModel.stepScreen(by: $0) }
-                    )
                 }
             }
         } else {
