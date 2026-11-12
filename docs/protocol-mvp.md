@@ -2405,8 +2405,10 @@ moves it into storage, makes it read-only and removes the incoming directory.
   `item` (trimmed, 1 to 40 characters, additive): the id of the decision item the image belongs to. The shim
   stages it, the daemon stores it in `items_json` and `artifact.path` returns it per item. With several
   decisions the app shows only the images of the decision on screen; an image with no `item` shows with every
-  decision. Without any `item` the app reads a caption prefix (a letter or number, then a space, `·`, `.`, `:`,
-  `)` or `-`, or a letter and number like `b1`), else the WAG-352 rule applies.
+  decision. Without any `item` the app reads a caption prefix (a number, then a space, `·`, `.`, `:`, `)` or
+  `-`, or a letter and number like `b1`), else the WAG-352 rule applies. A lone letter (`B · Tap`) names a
+  variant of a decision, not a decision (2026-11-12): a set whose captions use only lone letters keeps every
+  image with every decision.
   Each item is staged and re-validated exactly like a single screenshot (PNG or JPEG, max 20 MB,
   copied into `KNOCK_HOME/incoming/<uuid>/` as `shot-1.<ext>` .. `shot-N.<ext>`, incoming rules
   above) and moved into `blobs/<sha256>.<ext>` individually, so identical images across items or
