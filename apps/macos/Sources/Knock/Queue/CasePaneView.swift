@@ -276,6 +276,7 @@ struct CasePaneDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Paused: Decide and Send are off, and one line next to them says why.
         .environment(\.pausedAnswerLine, isOffline ? PausedCopy.answerLine : nil)
+        .modifier(OnScreenVariantProvider(store: commentsStore, isShowingSet: liveArtifact.selectedTab?.kind == .screenshots))
         // Files dropped on the request attach to the reply (WAG-345), until it is sent.
         .attachesDroppedFiles(to: sendFlow.composer.files, enabled: !isAnswerDisplayLocked || sendFlow.isEditingLockedAnswer)
         // A stale `.sent` from a prior send-and-cycle: the case returning to
@@ -1063,6 +1064,8 @@ struct CasePaneDetailView: View {
                     lastTarget: { askDoc.lastTarget(fullSize: $0) }, onOpen: { _, _ in })
                     .padding(.top, 8)
                     .allowsHitTesting(false)
+                    // The earlier round is a record: no option is «On screen».
+                    .environment(\.onScreenVariant, nil)
             }
         }
     }

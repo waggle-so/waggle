@@ -348,9 +348,17 @@ to. While that decision is on screen, Waggle shows only its images, counted insi
       { path: "./shots/legend.png", caption: "Legend" },
     ]
 
-With no `item`, Waggle reads a caption that starts with a number ("2. Badge") or a letter and a
-number ("b1 Badge") as the decision (1 or a1 is the first decision, 2 or b1 the second). A caption
-that starts with a lone letter ("B · Badge") names a variant, not a decision. Prefer `item`.
+Use `item` for the decision and a lone letter for the variant. Start the caption of each variant's
+screen with its letter ("A · Ring, idle", "B · Badge"). When a variant has several screens, give
+them all the same letter: Waggle numbers them for you (A1, A2) and shows the letter on each
+thumbnail and in the title. Do not number variant screens yourself ("b1"). Use at least two
+letters: one lettered caption reads as a plain title. Letter the variants in option order (A is the
+first option, C the third), or set the option's `anchor` to one of its images: while a variant is
+on screen, Waggle marks its option «On screen». An image with no letter in a set that uses `item`
+shows after the variants, as shared.
+
+With no `item`, Waggle still reads a caption that starts with a number ("2. Badge") as the
+decision. Prefer `item`.
 
 ## Variants of an html_bundle in a multi-question ask
 

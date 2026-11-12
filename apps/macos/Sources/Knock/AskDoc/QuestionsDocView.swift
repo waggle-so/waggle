@@ -142,6 +142,8 @@ struct ItemBlockView: View {
 /// Lean and rule-out icons show on items (WAG-326). This one view draws every item of every request.
 struct ItemRowsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The variant of the screen on show (decision record 2026-11-12): its option gets «On screen».
+    @Environment(\.onScreenVariant) private var onScreenVariant
     let number: Int
     let point: QuestionPoint
     let questionId: String
@@ -201,6 +203,9 @@ struct ItemRowsView: View {
     private var answers: some View {
         let isMany = point.select == .many
         let rows = doc.optionRows(question: questionId, point: point)
+        let onScreen = onScreenVariant?.option(
+            anchors: point.choices.map(\.anchor), item: point.itemId,
+            decisionCount: doc.questions.reduce(0) { $0 + $1.points.count })
         let open = CalmOption.openPosition(
             selected: rows.first(where: \.isSelected)?.position, recommended: rows.first(where: \.isRecommended)?.position,
             isCheckbox: isMany)
@@ -226,7 +231,7 @@ struct ItemRowsView: View {
                     isLeaning: row.isLeaning, isRuledOut: row.isRuledOut,
                     onLean: row.canDiscuss ? { doc.toggleLean(label, question: questionId, point: point.id) } : nil,
                     onRuleOut: row.canDiscuss ? { doc.toggleRuleOut(label, question: questionId, point: point.id) } : nil,
-                    isCheckbox: isMany, isLimitDimmed: row.isLimitDimmed) {
+                    isCheckbox: isMany, isLimitDimmed: row.isLimitDimmed, isOnScreen: onScreen == row.position - 1) {
                     // A click animates the open row once; number keys pick with no animation.
                     ReducedMotion.animate(reduceMotion: reduceMotion, .easeOut(duration: CalmOption.openDuration)) {
                         doc.choose(label, question: questionId, point: point.id)

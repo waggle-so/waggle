@@ -463,6 +463,8 @@ struct CompactOptionRow: View {
     /// same tooltip as a single ask. `isLimitDimmed` is an unticked row once the ticks reach `max`.
     var isCheckbox = false
     var isLimitDimmed = false
+    /// The screen on show in a screenshots set is this option's variant (decision record 2026-11-12). It never picks.
+    var isOnScreen = false
     let onSelect: () -> Void
 
     @State private var showsTip = false
@@ -626,6 +628,7 @@ struct CompactOptionRow: View {
                             .help(CalmOption.recommendedPill)
                     }
                 }
+                if isOnScreen { onScreenChip.fixedSize() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { titleRoom = $0 }
@@ -890,6 +893,21 @@ struct CompactOptionRow: View {
     private func hideTip() { hoverTask?.cancel(); showsTip = false }
 
     /// `.rec`: 600 10.5 / 1, padding 3 / 6, radius 5.
+    /// «On screen»: a honey dot and the words, in a thin outline, so it never reads as a pick or a recommendation.
+    private var onScreenChip: some View {
+        HStack(spacing: 4) {
+            Circle().fill(Theme.Colors.honey500).frame(width: 6, height: 6)
+            Text("On screen")
+                .knockTextStyle(Theme.Typography.onScreenChip10w600)
+                .foregroundColor(Theme.Colors.ink2)
+                .lineLimit(1)
+        }
+        .padding(EdgeInsets(top: 2, leading: 5, bottom: 2, trailing: 5))
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.Colors.line2, lineWidth: 1))
+        .help("This option's screen is on show")
+        .accessibilityLabel("On screen")
+    }
+
     private func tag(_ text: String, _ color: Color, _ fill: Color) -> some View {
         Text(text)
             .knockTextStyle(OptionCardStyle.tag)
@@ -1036,6 +1054,7 @@ struct CalmOptionRowView: View {
     var isLimitDimmed = false
     /// The card shows its details in place (`CalmOption.openPosition`).
     var isOpen = false
+    var isOnScreen = false
     let onSelect: () -> Void
 
     var body: some View {
@@ -1047,7 +1066,7 @@ struct CalmOptionRowView: View {
             facts: option.facts, proPoints: option.proPoints, conPoints: option.conPoints,
             isSelected: isSelected, isRecommended: isRecommended, isLocked: isLocked, isOpen: isOpen,
             isLeaning: isLeaning, isRuledOut: isRuledOut, onLean: onLean, onRuleOut: onRuleOut,
-            isCheckbox: isCheckbox, isLimitDimmed: isLimitDimmed, onSelect: onSelect)
+            isCheckbox: isCheckbox, isLimitDimmed: isLimitDimmed, isOnScreen: isOnScreen, onSelect: onSelect)
     }
 }
 

@@ -79,6 +79,8 @@ struct ReviewWorkspaceView: View {
     @State private var askColumnWidth: CGFloat = AskLayout.columnWidth
     /// The width of the artifact and the column together, for the column's width rule (C9).
     @State private var stageWidth: CGFloat = 1440
+    /// Full size shows its set view (every screen at once): no option is «On screen».
+    @State private var showsScreenSetView = false
 
     init(
         detail: CaseDetail, now: Date, client: KnockClient, sendCoordinator: SendCoordinator,
@@ -190,6 +192,9 @@ struct ReviewWorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Colors.win)
         .overlay(alignment: .bottom) { CommentUndoLineView(store: viewModel.commentsStore) }
+        .modifier(OnScreenVariantProvider(
+            store: viewModel.commentsStore, isShowingSet: viewModel.isShowingScreenshots && !showsScreenSetView))
+        .onPreferenceChange(ShowsScreenSetViewKey.self) { showsScreenSetView = $0 }
         .onAppear {
             unsentWorkRegistry?.registerUnsentWorkProbe(id: probeId) { [weak sendFlow, weak viewModel] in
                 (sendFlow?.hasUnsentWork ?? false) || (viewModel?.editSession?.hasChanges ?? false)

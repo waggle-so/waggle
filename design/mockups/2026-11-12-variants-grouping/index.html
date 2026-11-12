@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup canvas</title>
+<!--
+  Mockup canvas (from ~/.claude/skills/mockup/canvas.html). Topic: how a screenshots set shows the
+  variants of one decision in a request with several decisions (the review screen, full size).
+  Content: the real Curatool case "Decreto di chiusura: dove mostriamo «Chiudi la procedura»?" (Varianti S7).
+-->
+<script type="application/json" id="mockup-meta">
+{
+  "title": "Variants of a decision in a screenshots set",
+  "axis": "Where the variants live: grouped strip → named tabs on the stage → all variants side by side",
+  "devices": { "desktop": [1440, 900] },
+  "themes": ["light"],
+  "states": [],
+  "view": { "theme": "light", "device": "desktop", "v": "all", "state": "", "zoom": 1 }
+}
+</script>
+
+<style id="tokens">
+  @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
+  :root {
+    --win: #fff; --side: #f3f3f3; --list: #fafafa; --sel: #ebebeb; --stage: #f4f4f5;
+    --ink: #16181a; --ink2: #4a4c50; --ink3: #6b6b6b; --quiet: #8a8a8a;
+    --line: #e6e6e6; --line2: #d9d9d9;
+    --honey300: #f9c846; --honey500: #f2b01e; --honey600: #e89a0c; --honey-soft: #fdf4da; --rec-text: #c98a00;
+    --open: #e0352b; --ok: #18a058; --ok-soft: #e3f5ea; --pro: #0e7a43; --watch: #c2410c;
+    --sans: "Inter Tight", -apple-system, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--win); color: var(--ink); font: 400 13px/1.4 var(--sans); }
+  body { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+  .app { display: grid; grid-template-columns: 224px 1fr 330px; height: 100%; }
+  .mono { font-family: var(--mono); }
+
+  /* queue */
+  .side { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { display: flex; align-items: center; justify-content: space-between; padding: 38px 14px 10px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-weight: 500; font-size: 14px; letter-spacing: -0.03em; }
+  .mark { width: 15px; height: 15px; background: var(--honey500); clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+  .needs { font-weight: 600; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .count { background: var(--open); color: #fff; font-weight: 700; font-size: 10.5px; border-radius: 9px; padding: 1px 6px; }
+  .sec { font: 600 10px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 12px 14px 6px; }
+  .row { display: flex; gap: 8px; padding: 8px 14px; align-items: baseline; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--open); flex: none; transform: translateY(-1px); }
+  .row.sel { background: #fff; box-shadow: inset 3px 0 0 var(--honey500); }
+  .row-t { font-weight: 600; font-size: 12.5px; line-height: 1.3; }
+  .row-m { color: var(--quiet); font-size: 11px; margin-top: 2px; }
+  .side-foot { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink3); font-size: 11.5px; }
+
+  /* middle: artifact */
+  .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .top { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 12px; color: var(--ink3); }
+  .top .wait { margin-left: auto; background: var(--honey-soft); color: var(--rec-text); font-weight: 600; font-size: 11px; border-radius: 6px; padding: 3px 8px; }
+  .box { flex: 1; min-height: 0; margin: 0 12px 12px; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+  .box-h { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .tab { display: inline-flex; gap: 6px; align-items: center; background: var(--side); border-radius: 6px; padding: 4px 8px; font-weight: 600; font-size: 12px; }
+  .ver { color: var(--quiet); font-size: 11.5px; }
+  .full { margin-left: auto; border: 1px solid var(--line2); border-radius: 6px; padding: 3px 8px; font-size: 11.5px; }
+  .stage { flex: 1; min-height: 0; background: var(--stage); display: flex; align-items: center; justify-content: center; position: relative; padding: 16px; }
+  .comment { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 12px; }
+
+  /* a Curatool screen, drawn small */
+  .cur { width: 100%; max-width: 720px; aspect-ratio: 16 / 10; background: #fff; border-radius: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 6px 18px rgb(0 0 0 / .06); display: grid; grid-template-columns: 22% 1fr; overflow: hidden; font-size: 9.5px; color: var(--ink2); }
+  .cur-nav { border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 7px; }
+  .cur-nav b { color: var(--ink); font-size: 10px; }
+  .cur-nav i { font-style: normal; color: var(--quiet); }
+  .cur-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 9px; }
+  .cur h4 { margin: 0; font-size: 15px; color: var(--ink); letter-spacing: -0.02em; }
+  .cur .crumb { font: 400 8px/1 var(--mono); color: var(--quiet); }
+  .ban { background: #fbf1c7; border: 1px solid #f1d98a; border-radius: 5px; padding: 8px 10px; display: flex; gap: 10px; align-items: flex-start; }
+  .ban b { color: var(--ink); display: block; margin-bottom: 2px; }
+  .ban .act { margin-left: auto; background: var(--ink); color: #fff; border-radius: 4px; padding: 3px 6px; white-space: nowrap; font-weight: 600; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+  .grid3 span { color: var(--quiet); font-size: 7.5px; text-transform: uppercase; letter-spacing: .05em; display: block; }
+  .todo { border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .todo b { color: var(--ink); }
+  .chk { background: #fbf1c7; border: 1px solid #f1d98a; border-radius: 5px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .chk .r { display: flex; gap: 8px; align-items: center; }
+  .chk .r .act { margin-left: auto; background: var(--ink); color: #fff; border-radius: 4px; padding: 2px 6px; font-weight: 600; }
+  .sync { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; }
+  .sync .ok { background: var(--ok-soft); color: var(--pro); border-radius: 5px; padding: 6px 8px; grid-column: 1 / -1; }
+  .sync .list { border: 1px solid var(--line); border-radius: 5px; display: flex; flex-direction: column; }
+  .sync .list div { padding: 6px 8px; border-top: 1px solid var(--line); }
+  .sync .list div:first-child { border-top: 0; }
+  .sync .list .hl { background: #fbf1c7; }
+  .sync .doc { border: 1px solid var(--line); border-radius: 5px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .sync .doc .paper { background: #fafafa; border: 1px solid var(--line); padding: 10px; font-family: Georgia, serif; font-size: 8px; text-align: center; }
+
+  /* thumbnails: the same screens, abstract */
+  .th { width: 64px; height: 40px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px var(--line2); position: relative; overflow: hidden; flex: none; }
+  .th::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 13px; border-right: 1px solid var(--line); }
+  .th i { position: absolute; left: 17px; right: 4px; border-radius: 1px; background: var(--line); height: 3px; }
+  .th i.y { background: #f1d98a; height: 8px; }
+  .th i.g { background: #c7ead4; height: 4px; }
+  .th.on { box-shadow: 0 0 0 2px var(--honey500); }
+  .th.dlg { background: #8b8b8b; }
+  .th.dlg::after { content: ""; position: absolute; left: 18px; right: 18px; top: 9px; bottom: 9px; background: #fff; border-radius: 2px; }
+
+  /* right: decision panel */
+  .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .ptabs { display: flex; margin: 12px 12px 10px; background: var(--side); border-radius: 8px; padding: 2px; }
+  .ptabs span { flex: 1; text-align: center; padding: 5px 0; border-radius: 6px; font-size: 12px; color: var(--ink3); }
+  .ptabs span.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .steps { display: flex; gap: 5px; align-items: center; padding: 0 12px 8px; }
+  .steps span { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--side); color: var(--ink3); }
+  .steps span.on { background: var(--ink); color: #fff; }
+  .steps span.done { background: var(--ok-soft); color: var(--pro); }
+  .steps .sendp { width: auto; padding: 0 8px; }
+  .q { font-weight: 600; font-size: 16px; line-height: 1.25; letter-spacing: -0.02em; padding: 0 12px 10px; margin: 0; }
+  .need { margin: 0 12px 14px; background: var(--honey-soft); border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.45; color: var(--ink); font-weight: 500; }
+  .lbl { font: 600 10px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 0 12px 8px; }
+  .opt { margin: 0 12px 8px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 5px; }
+  .opt.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: linear-gradient(#fffdf6, #fff); }
+  .opt-h { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
+  .radio { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--line2); flex: none; }
+  .opt.on .radio { border: 4px solid var(--honey500); }
+  .rec { white-space: nowrap; font: 600 10px/1 var(--sans); color: var(--rec-text); background: var(--honey-soft); border-radius: 4px; padding: 3px 5px; }
+  .opt p { margin: 0; font-size: 11.5px; color: var(--ink2); }
+  .kbd { margin-left: auto; font: 400 10px/1 var(--mono); color: var(--ink3); border: 1px solid var(--line2); border-radius: 4px; padding: 2px 5px; }
+  .composer { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; align-items: center; }
+  .composer .note { flex: 1; color: var(--quiet); font-size: 12px; }
+  .ask { background: var(--ink); color: #fff; border-radius: 7px; padding: 6px 12px; font-weight: 600; font-size: 12px; }
+  .letter { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: var(--ink); color: #fff; font: 600 11px/1 var(--sans); flex: none; }
+  .letter.soft { background: var(--side); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line2); }
+</style>
+</head>
+<body>
+<template data-variant="strip" data-name="A · Grouped strip" data-position="Same filmstrip, never filtered: every image always there, grouped by decision with a letter and a name" data-right-when="You want the smallest change: today's strip, just never hiding images and saying what each one is" data-costs="The variants stay small at the bottom; the link to the options on the right is only the letter">
+<style>
+  .strip { flex: none; border-top: 1px solid var(--line); background: #fafafa; padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .groups { display: flex; gap: 18px; align-items: flex-end; }
+  .grp { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; border-radius: 8px; }
+  .grp.cur-d { background: #fff; box-shadow: 0 0 0 1px var(--line2); }
+  .grp.other { opacity: .55; }
+  .grp-h { font-size: 11px; color: var(--ink3); display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .grp-h b { color: var(--ink); font-weight: 600; }
+  .thumbs { display: flex; gap: 8px; }
+  .t { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; width: 92px; }
+  .t .th { width: 92px; height: 54px; }
+  .t .cap { display: flex; gap: 5px; align-items: center; font-size: 11px; color: var(--ink2); line-height: 1.2; }
+  .t .cap .letter { width: 16px; height: 16px; font-size: 10px; }
+  .t.on .cap { color: var(--ink); font-weight: 600; }
+  .now { font-size: 12px; color: var(--ink2); display: flex; gap: 8px; align-items: center; }
+  .now .mono { color: var(--quiet); font-size: 11px; }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="full">Open full size ↗</span></div>
+    <div class="stage"><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="ban"><div><b>Nella cartella c'è un decreto di chiusura, ma la procedura è ancora attiva</b>Decreto del 03/11/2026, trovato dalla sincronizzazione l'11/11/2026, 08:12.</div><span class="act">Chiudi la procedura</span></div>
+        <div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><span class="comment">Comment</span></div>
+    <div class="strip">
+  <div class="groups">
+    <div class="grp cur-d"><div class="grp-h"><b>Decisione 1</b>· 3 varianti</div><div class="thumbs"><div class="t on"><div class="th on"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i></div><div class="cap"><span class="letter">A</span>Banner</div></div><div class="t"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i></div><div class="cap"><span class="letter soft">B</span>Riga</div></div><div class="t"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i></div><div class="cap"><span class="letter soft">C</span>Sync</div></div></div></div>
+    <div class="grp other"><div class="grp-h"><b>Per tutte</b></div><div class="thumbs"><div class="t"><div class="th dlg"></div><div class="cap">Conferma</div></div></div></div>
+  </div>
+  <div class="now"><span class="letter">A</span><b>Banner in alto nella pagina della procedura</b><span class="mono">1 / 4 · ← →</span></div>
+</div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="on">1</span><span class="done">✓</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Dove mostriamo l'avviso con «Chiudi la procedura»?</h2>
+  <div class="need">Arriva un decreto di chiusura su una procedura attiva. Dove Curatool mostra l'avviso con «Chiudi la procedura»?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span><span class="letter" title="Variante A">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Un banner giallo in alto nella pagina della procedura, con «Lascia attiva» e «Chiudi la procedura».</p></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante B">B</span>Riga in Verifica di coerenza<span class="kbd">2</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante C">C</span>Riepilogo della sync<span class="kbd">3</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<template data-variant="tabs" data-name="B · Named tabs" data-position="The variants of the decision on screen become named tabs above the image, the same names and letters as the options on the right" data-right-when="You want variant and option to read as one thing: pick B on the right, tab B is on, and back" data-costs="Moves the strip from the bottom to the top of the stage; with 5+ images the row has to scroll or shrink to letters">
+<style>
+  .vtabs { flex: none; display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #fafafa; align-items: center; }
+  .vtab { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line2); background: #fff; border-radius: 9px; padding: 5px 10px 5px 5px; font-size: 12px; font-weight: 500; color: var(--ink2); }
+  .vtab .th { width: 44px; height: 28px; }
+  .vtab.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: var(--honey-soft); color: var(--ink); font-weight: 600; }
+  .vtab .rec { margin-left: 2px; }
+  .vtabs .sep { width: 1px; align-self: stretch; background: var(--line2); margin: 0 4px; }
+  .vtabs .shared { color: var(--ink3); }
+  .hint { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .opt .see { margin-left: auto; font-size: 11px; color: var(--ink3); font-weight: 500; }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="full">Open full size ↗</span></div>
+    <div class="vtabs"><div class="vtab on"><div class="th on"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i></div><span class="letter">A</span>Banner nella procedura <span class="rec">★</span></div><div class="vtab"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i></div><span class="letter soft">B</span>Riga in Verifica di coerenza</div><div class="vtab"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i></div><span class="letter soft">C</span>Riepilogo della sync</div><span class="sep"></span><div class="vtab shared"><div class="th dlg"></div>Conferma chiusura · per tutte</div><span class="hint">← →</span></div>
+    <div class="stage"><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="ban"><div><b>Nella cartella c'è un decreto di chiusura, ma la procedura è ancora attiva</b>Decreto del 03/11/2026, trovato dalla sincronizzazione l'11/11/2026, 08:12.</div><span class="act">Chiudi la procedura</span></div>
+        <div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><span class="comment">Comment</span></div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="on">1</span><span class="done">✓</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Dove mostriamo l'avviso con «Chiudi la procedura»?</h2>
+  <div class="need">Arriva un decreto di chiusura su una procedura attiva. Dove Curatool mostra l'avviso con «Chiudi la procedura»?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span><span class="letter" title="Variante A">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Un banner giallo in alto nella pagina della procedura, con «Lascia attiva» e «Chiudi la procedura».</p></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante B">B</span>Riga in Verifica di coerenza<span class="kbd">2</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante C">C</span>Riepilogo della sync<span class="kbd">3</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<template data-variant="compare" data-name="C · Side by side (stretch)" data-position="The decision opens on all its variants at once, one column per option; click one to see it full" data-right-when="The decision is a visual comparison: you judge A against B against C, not one image at a time" data-costs="Each variant is small until you open it; comments go on the single view; needs a One / Compare switch">
+<style>
+  .stage.cmp { align-content: start; align-items: start; justify-content: stretch; padding: 14px; gap: 12px; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; border-radius: 10px; padding: 8px; }
+  .col.on { background: #fff; box-shadow: 0 0 0 2px var(--honey500); }
+  .col-h { display: flex; gap: 7px; align-items: center; font-weight: 600; font-size: 12.5px; }
+  .col-h .open { margin-left: auto; font-weight: 500; font-size: 11px; color: var(--ink3); }
+  .col .cur { max-width: none; font-size: 6.4px; aspect-ratio: auto; height: 260px; }
+  .col .cur h4 { font-size: 10px; }
+  .col .cur .crumb { font-size: 5.5px; }
+  .col .cur .grid3 span { font-size: 5px; }
+  .col p { margin: 0; font-size: 11.5px; color: var(--ink2); }
+  .mode { margin-left: 8px; display: flex; gap: 2px; background: var(--side); border-radius: 6px; padding: 2px; }
+  .mode span { padding: 2px 8px; border-radius: 4px; font-size: 11.5px; color: var(--ink3); }
+  .mode span.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .foot { flex: none; border-top: 1px solid var(--line); padding: 8px 14px; font-size: 11.5px; color: var(--ink3); display: flex; gap: 8px; align-items: center; }
+  .foot .th { width: 40px; height: 25px; }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="mode"><span>One</span><span class="on">Compare</span></span><span class="full">Open full size ↗</span></div>
+    <div class="stage cmp"><div class="col on"><div class="col-h"><span class="letter">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="open">Open ↗</span></div><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="ban"><div><b>Nella cartella c'è un decreto di chiusura, ma la procedura è ancora attiva</b>Decreto del 03/11/2026, trovato dalla sincronizzazione l'11/11/2026, 08:12.</div><span class="act">Chiudi la procedura</span></div>
+        <div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><p>Banner in alto nella pagina della procedura</p></div><div class="col"><div class="col-h"><span class="letter soft">B</span>Riga in Verifica di coerenza<span class="open">Open ↗</span></div><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4>
+        <div class="chk"><b style="color:var(--ink)">Verifica di coerenza — 2 punti da controllare</b><div class="r">In archivio c'è un decreto di chiusura del 03/11/2026, ma la procedura è ancora attiva.<span class="act">Chiudi la procedura</span></div><div class="r">L'ultimo rapporto risulta di 42 giorni fa.</div></div><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><p>Riga nel pannello «Verifica di coerenza»</p></div><div class="col"><div class="col-h"><span class="letter soft">C</span>Riepilogo della sync<span class="open">Open ↗</span></div><div class="cur"><div class="cur-nav"><b>Curatool</b><span>Workspace</span><span>Procedure</span><span>Calendario</span><span>Import-Export</span><span>Casella PEC</span></div><div class="cur-body"><div class="crumb">STUDIO / IMPORT-EXPORT</div><h4>Sincronizzazione delle cartelle</h4>
+        <div class="sync"><div class="ok">Sincronizzazione completata: 10 file nuovi in 4 procedure.</div>
+        <div class="list"><div>112/2024 · Beta Esempio S.p.A.</div><div class="hl">57/2026 · Alfa Prova S.r.l. · Da decidere</div><div>203/2025 · Gamma Prova S.n.c.</div><div>18/2026 · Delta Fittizia S.r.l.</div></div>
+        <div class="doc"><b style="color:var(--ink)">2026-11-03 Decreto di chiusura.pdf</b><div class="paper">TRIBUNALE DI ESEMPIO<br>… DICHIARA LA CHIUSURA della procedura …</div><span>È un decreto di chiusura di LG 57/2026? <b style="color:var(--ink)">Chiudi la procedura</b></span></div></div></div></div><p>Riepilogo della sincronizzazione, con il decreto aperto a fianco</p></div></div>
+    <div class="foot">Per tutte le decisioni: <div class="th dlg"></div> Conferma chiusura</div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="on">1</span><span class="done">✓</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Dove mostriamo l'avviso con «Chiudi la procedura»?</h2>
+  <div class="need">Arriva un decreto di chiusura su una procedura attiva. Dove Curatool mostra l'avviso con «Chiudi la procedura»?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span><span class="letter" title="Variante A">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Un banner giallo in alto nella pagina della procedura, con «Lascia attiva» e «Chiudi la procedura».</p></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante B">B</span>Riga in Verifica di coerenza<span class="kbd">2</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft" title="Variante C">C</span>Riepilogo della sync<span class="kbd">3</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<!-- ===== Canvas chrome below: no need to edit. It stays outside the project's design system on purpose. ===== -->
+<style>
+  :root { color-scheme: light; }
+  body.mc-canvas { margin: 0; background: #e9e9ec; color: #1d1d20; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  /* The page's own tokens may lock html/body to the window (a full-screen app); the canvas must still scroll. */
+  html:has(> body.mc-canvas), body.mc-canvas { height: auto; overflow: visible; }
+  .mc-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; background: #f7f7f8; border-bottom: 1px solid #d4d4d8; }
+  .mc-bar h1 { margin: 0; font-size: 14px; font-weight: 600; }
+  .mc-bar .mc-axis { color: #5f5f66; }
+  .mc-group { display: flex; gap: 2px; padding: 2px; background: #e4e4e7; border-radius: 7px; }
+  .mc-group button { border: 0; background: transparent; padding: 4px 10px; border-radius: 5px; font: inherit; color: #3f3f46; cursor: pointer; min-height: 28px; }
+  .mc-group button[aria-pressed="true"] { background: #fff; color: #111; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+  .mc-group button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+  .mc-board { padding: 24px; overflow-x: auto; }
+  .mc-row { display: flex; gap: 32px; align-items: flex-start; width: max-content; }
+  .mc-row + .mc-row { margin-top: 40px; }
+  .mc-frame figcaption { margin-bottom: 8px; }
+  .mc-frame figcaption strong { font-size: 14px; }
+  .mc-frame figcaption span { color: #5f5f66; margin-left: 6px; }
+  .mc-frame { margin: 0; }
+  .mc-frame iframe { display: block; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.08); }
+  .mc-notes { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; color: #3f3f46; max-width: 100%; }
+  .mc-notes dt { color: #71717a; }
+  .mc-notes dd { margin: 0; }
+  /* ?export=1: one bare frame, centred, for screenshots (bash shoot.sh) */
+  .mc-export .mc-bar, .mc-export figcaption, .mc-export .mc-notes { display: none; }
+  .mc-export .mc-board { padding: 0; }
+  .mc-export .mc-row { width: auto; justify-content: center; }
+  .mc-export .mc-frame iframe { border-radius: 0; box-shadow: none; }
+</style>
+<script>
+(() => {
+  const meta = JSON.parse(document.getElementById("mockup-meta").textContent);
+  const tokens = document.getElementById("tokens").outerHTML;
+  const variants = [...document.querySelectorAll("template[data-variant]")];
+  const params = new URLSearchParams(location.search);
+  const view = { ...meta.view };
+  for (const k of ["theme", "device", "v", "state", "zoom", "export"]) if (params.has(k)) view[k] = params.get(k);
+
+  document.body.classList.add("mc-canvas");
+  if (view.export) document.body.classList.add("mc-export");
+  document.title = `${meta.title} · mockup`;
+
+  const bar = document.createElement("header");
+  bar.className = "mc-bar";
+  bar.innerHTML = `<h1></h1><span class="mc-axis"></span>`;
+  bar.querySelector("h1").textContent = meta.title;
+  bar.querySelector(".mc-axis").textContent = `Axis: ${meta.axis}`;
+  const board = document.createElement("div");
+  board.className = "mc-board";
+  document.body.append(bar, board);
+
+  function group(label, key, values) {
+    if (values.length < 2) return;
+    const g = document.createElement("div");
+    g.className = "mc-group";
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label);
+    for (const [value, text] of values) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.dataset.key = key;
+      b.dataset.value = value;
+      b.addEventListener("click", () => { view[key] = value; sync(); });
+      g.append(b);
+    }
+    bar.append(g);
+  }
+  const themes = meta.themes.map((t) => [t, t[0].toUpperCase() + t.slice(1)]);
+  if (meta.themes.length > 1) themes.push(["both", "Both"]);
+  group("Theme", "theme", themes);
+  group("Device", "device", Object.keys(meta.devices).map((d) => [d, d[0].toUpperCase() + d.slice(1)]));
+  if (!view.state && meta.states?.length) view.state = meta.states[0];
+  group("State", "state", (meta.states || []).map((s) => [s, s[0].toUpperCase() + s.slice(1)]));
+  group("Variants", "v", [["all", "All"], ...variants.map((t) => [t.dataset.variant, t.dataset.name])]);
+
+  function frame(t, theme) {
+    const [w, h] = meta.devices[view.device] || Object.values(meta.devices)[0];
+    const fig = document.createElement("figure");
+    fig.className = "mc-frame";
+    fig.style.width = `${w}px`;
+    const cap = document.createElement("figcaption");
+    cap.innerHTML = "<strong></strong><span></span>";
+    cap.querySelector("strong").textContent = t.dataset.name;
+    cap.querySelector("span").textContent = [t.dataset.position, view.theme === "both" ? theme : ""].filter(Boolean).join(", ");
+    const iframe = document.createElement("iframe");
+    iframe.title = `${t.dataset.name}, ${theme}`;
+    iframe.width = w;
+    iframe.height = h;
+    iframe.srcdoc = `<!doctype html><html class="${theme === "dark" ? "dark" : ""}" data-state="${view.state || ""}"><head><meta charset="utf-8"><meta name="viewport" content="width=${w}">${tokens}</head><body>${t.innerHTML}</body></html>`;
+    iframe.addEventListener("load", () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      // Frames stay at device height and scroll inside, like a real screen (fixed docks stay visible).
+      // "grow": true in the meta makes them as tall as the content instead (long pages, landings).
+      if (!meta.grow) return;
+      const fit = () => { iframe.height = Math.max(h, doc.documentElement.scrollHeight); };
+      fit();
+      new ResizeObserver(fit).observe(doc.body);
+      doc.querySelectorAll("img").forEach((img) => img.addEventListener("load", fit));
+    });
+    fig.append(cap, iframe);
+    if (t.dataset.rightWhen || t.dataset.costs) {
+      const dl = document.createElement("dl");
+      dl.className = "mc-notes";
+      for (const [label, value] of [["Right when", t.dataset.rightWhen], ["Costs", t.dataset.costs]]) {
+        if (!value) continue;
+        const dt = document.createElement("dt"); dt.textContent = label;
+        const dd = document.createElement("dd"); dd.textContent = value;
+        dl.append(dt, dd);
+      }
+      fig.append(dl);
+    }
+    return fig;
+  }
+
+  function sync() {
+    const url = new URL(location.href);
+    for (const k of ["theme", "device", "v", "state"]) if (view[k]) url.searchParams.set(k, view[k]);
+    try { history.replaceState(null, "", url); } catch {}
+    bar.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(view[b.dataset.key] === b.dataset.value)));
+    board.replaceChildren();
+    board.style.zoom = view.zoom || 1;
+    const shown = view.v === "all" ? variants : variants.filter((t) => t.dataset.variant === view.v);
+    const rows = view.theme === "both" ? meta.themes : [view.theme];
+    for (const theme of rows) {
+      const row = document.createElement("div");
+      row.className = "mc-row";
+      for (const t of shown) row.append(frame(t, theme));
+      board.append(row);
+    }
+    if (!shown.length) console.error(`mockup canvas: no variant with id "${view.v}"`);
+  }
+
+  addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= variants.length) { view.v = variants[n - 1].dataset.variant; sync(); }
+    if (e.key === "0") { view.v = "all"; sync(); }
+  });
+  sync();
+  console.log(`mockup canvas: ${variants.length} variants, theme=${view.theme}, device=${view.device}, state=${view.state || "-"}, v=${view.v}`);
+})();
+</script>
+</body>
+</html>

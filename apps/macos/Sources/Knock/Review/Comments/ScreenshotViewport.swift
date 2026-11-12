@@ -98,12 +98,6 @@ enum StageArrangement: Equatable {
     case set
 }
 
-/// The counter line of the filmstrip: "2 / 4 · <full screen title>".
-enum FilmstripText {
-    static func label(index: Int, total: Int, title: String) -> String {
-        "\(index) / \(total) · \(title)"
-    }
-}
 
 /// Moving the outline in Set view: clamped at both ends.
 enum SetSelection {

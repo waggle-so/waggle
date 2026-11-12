@@ -82,11 +82,6 @@ struct ScreenshotViewportTests {
         #expect(model.isFit && !model.isActualSize)
     }
 
-    @Test func filmstripTextShowsTheCounterAndTheFullTitle() {
-        #expect(FilmstripText.label(index: 2, total: 4, title: "A · More room for the trend") == "2 / 4 · A · More room for the trend")
-        #expect(FilmstripText.label(index: 1, total: 1, title: "Screen 1") == "1 / 1 · Screen 1")
-    }
-
     @Test func screenTitleIsTheCaptionOrScreenN() {
         let store = CommentsSessionStore()
         let image = NSImage(size: NSSize(width: 10, height: 10))

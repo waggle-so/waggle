@@ -915,6 +915,8 @@ struct PointOption: Codable, Equatable, Sendable, Identifiable, ExpressibleByStr
     /// Not on the wire.
     var detail: String? = nil
     var why: String? = nil
+    /// The item option's anchor (not on the wire): the image of a screenshots set it names, for «On screen».
+    var anchor: String? = nil
     /// The id of the item option this answer stands for (WAG-315); `nil` on an answer of the old questions
     /// shape, which goes back as its label. Not on the wire.
     var optionId: String? = nil
@@ -928,8 +930,9 @@ struct PointOption: Codable, Equatable, Sendable, Identifiable, ExpressibleByStr
     init(
         label: String, pros: [String] = [], cons: [String] = [], effects: [String] = [], optionId: String? = nil,
         proPoints: [OptionPoint]? = nil, conPoints: [OptionPoint]? = nil, facts: [String] = [],
-        detail: String? = nil, why: String? = nil
+        detail: String? = nil, why: String? = nil, anchor: String? = nil
     ) {
+        self.anchor = anchor
         self.label = label
         self.proPoints = (proPoints ?? []) + pros.map { OptionPoint(detail: $0) }
         self.conPoints = (conPoints ?? []) + cons.map { OptionPoint(detail: $0) }

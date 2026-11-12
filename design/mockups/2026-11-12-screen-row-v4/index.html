@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup canvas</title>
+<!--
+  Mockup canvas (from ~/.claude/skills/mockup/canvas.html). Topic: how a screenshots set shows the
+  variants of one decision in a request with several decisions (the review screen, full size).
+  Content: the real Curatool case "Decreto di chiusura: dove mostriamo «Chiudi la procedura»?" (Varianti S7).
+-->
+<script type="application/json" id="mockup-meta">
+{
+  "title": "Compact row, title on top",
+  "axis": "One thin row: small thumbnails, the letter inside each one, the caption only on hover, the counter at the end of the row",
+  "devices": { "desktop": [1440, 900] },
+  "themes": ["light"],
+  "states": [],
+  "view": { "theme": "light", "device": "desktop", "v": "all", "state": "", "zoom": 1 }
+}
+</script>
+
+<style id="tokens">
+  @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
+  :root {
+    --win: #fff; --side: #f3f3f3; --list: #fafafa; --sel: #ebebeb; --stage: #f4f4f5;
+    --ink: #16181a; --ink2: #4a4c50; --ink3: #6b6b6b; --quiet: #8a8a8a;
+    --line: #e6e6e6; --line2: #d9d9d9;
+    --honey300: #f9c846; --honey500: #f2b01e; --honey600: #e89a0c; --honey-soft: #fdf4da; --rec-text: #c98a00;
+    --open: #e0352b; --ok: #18a058; --ok-soft: #e3f5ea; --pro: #0e7a43; --watch: #c2410c;
+    --sans: "Inter Tight", -apple-system, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--win); color: var(--ink); font: 400 13px/1.4 var(--sans); }
+  body { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+  .app { display: grid; grid-template-columns: 224px 1fr 330px; height: 100%; }
+  .mono { font-family: var(--mono); }
+
+  /* queue */
+  .side { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { display: flex; align-items: center; justify-content: space-between; padding: 38px 14px 10px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-weight: 500; font-size: 14px; letter-spacing: -0.03em; }
+  .mark { width: 15px; height: 15px; background: var(--honey500); clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+  .needs { font-weight: 600; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .count { background: var(--open); color: #fff; font-weight: 700; font-size: 10.5px; border-radius: 9px; padding: 1px 6px; }
+  .sec { font: 600 10px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 12px 14px 6px; }
+  .row { display: flex; gap: 8px; padding: 8px 14px; align-items: baseline; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--open); flex: none; transform: translateY(-1px); }
+  .row.sel { background: #fff; box-shadow: inset 3px 0 0 var(--honey500); }
+  .row-t { font-weight: 600; font-size: 12.5px; line-height: 1.3; }
+  .row-m { color: var(--quiet); font-size: 11px; margin-top: 2px; }
+  .side-foot { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--ink3); font-size: 11.5px; }
+
+  /* middle: artifact */
+  .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .top { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 12px; color: var(--ink3); }
+  .top .wait { margin-left: auto; background: var(--honey-soft); color: var(--rec-text); font-weight: 600; font-size: 11px; border-radius: 6px; padding: 3px 8px; }
+  .box { flex: 1; min-height: 0; margin: 0 12px 12px; border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+  .box-h { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .tab { display: inline-flex; gap: 6px; align-items: center; background: var(--side); border-radius: 6px; padding: 4px 8px; font-weight: 600; font-size: 12px; }
+  .ver { color: var(--quiet); font-size: 11.5px; }
+  .full { margin-left: auto; border: 1px solid var(--line2); border-radius: 6px; padding: 3px 8px; font-size: 11.5px; }
+  .stage { flex: 1; min-height: 0; background: var(--stage); display: flex; align-items: center; justify-content: center; position: relative; padding: 16px; }
+  .comment { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 12px; }
+
+  /* a Curatool screen, drawn small */
+  .cur { width: 100%; max-width: 720px; aspect-ratio: 16 / 10; background: #fff; border-radius: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 6px 18px rgb(0 0 0 / .06); display: grid; grid-template-columns: 22% 1fr; overflow: hidden; font-size: 9.5px; color: var(--ink2); }
+  .cur-nav { border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 7px; }
+  .cur-nav b { color: var(--ink); font-size: 10px; }
+  .cur-nav i { font-style: normal; color: var(--quiet); }
+  .cur-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 9px; }
+  .cur h4 { margin: 0; font-size: 15px; color: var(--ink); letter-spacing: -0.02em; }
+  .cur .crumb { font: 400 8px/1 var(--mono); color: var(--quiet); }
+  .ban { background: #fbf1c7; border: 1px solid #f1d98a; border-radius: 5px; padding: 8px 10px; display: flex; gap: 10px; align-items: flex-start; }
+  .ban b { color: var(--ink); display: block; margin-bottom: 2px; }
+  .ban .act { margin-left: auto; background: var(--ink); color: #fff; border-radius: 4px; padding: 3px 6px; white-space: nowrap; font-weight: 600; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+  .grid3 span { color: var(--quiet); font-size: 7.5px; text-transform: uppercase; letter-spacing: .05em; display: block; }
+  .todo { border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .todo b { color: var(--ink); }
+  .chk { background: #fbf1c7; border: 1px solid #f1d98a; border-radius: 5px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .chk .r { display: flex; gap: 8px; align-items: center; }
+  .chk .r .act { margin-left: auto; background: var(--ink); color: #fff; border-radius: 4px; padding: 2px 6px; font-weight: 600; }
+  .sync { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; }
+  .sync .ok { background: var(--ok-soft); color: var(--pro); border-radius: 5px; padding: 6px 8px; grid-column: 1 / -1; }
+  .sync .list { border: 1px solid var(--line); border-radius: 5px; display: flex; flex-direction: column; }
+  .sync .list div { padding: 6px 8px; border-top: 1px solid var(--line); }
+  .sync .list div:first-child { border-top: 0; }
+  .sync .list .hl { background: #fbf1c7; }
+  .sync .doc { border: 1px solid var(--line); border-radius: 5px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .sync .doc .paper { background: #fafafa; border: 1px solid var(--line); padding: 10px; font-family: Georgia, serif; font-size: 8px; text-align: center; }
+
+  /* thumbnails: the same screens, abstract */
+  .th { width: 64px; height: 40px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px var(--line2); position: relative; overflow: hidden; flex: none; }
+  .th::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 13px; border-right: 1px solid var(--line); }
+  .th i { position: absolute; left: 17px; right: 4px; border-radius: 1px; background: var(--line); height: 3px; }
+  .th i.y { background: #f1d98a; height: 8px; }
+  .th i.g { background: #c7ead4; height: 4px; }
+  .th.on { box-shadow: 0 0 0 2px var(--honey500); }
+  .th.dlg { background: #8b8b8b; }
+  .th.dlg::after { content: ""; position: absolute; left: 18px; right: 18px; top: 9px; bottom: 9px; background: #fff; border-radius: 2px; }
+
+  /* right: decision panel */
+  .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .ptabs { display: flex; margin: 12px 12px 10px; background: var(--side); border-radius: 8px; padding: 2px; }
+  .ptabs span { flex: 1; text-align: center; padding: 5px 0; border-radius: 6px; font-size: 12px; color: var(--ink3); }
+  .ptabs span.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .steps { display: flex; gap: 5px; align-items: center; padding: 0 12px 8px; }
+  .steps span { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--side); color: var(--ink3); }
+  .steps span.on { background: var(--ink); color: #fff; }
+  .steps span.done { background: var(--ok-soft); color: var(--pro); }
+  .steps .sendp { width: auto; padding: 0 8px; }
+  .q { font-weight: 600; font-size: 16px; line-height: 1.25; letter-spacing: -0.02em; padding: 0 12px 10px; margin: 0; }
+  .need { margin: 0 12px 14px; background: var(--honey-soft); border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.45; color: var(--ink); font-weight: 500; }
+  .lbl { font: 600 10px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 0 12px 8px; }
+  .opt { margin: 0 12px 8px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 5px; }
+  .opt.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: linear-gradient(#fffdf6, #fff); }
+  .opt-h { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
+  .radio { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--line2); flex: none; }
+  .opt.on .radio { border: 4px solid var(--honey500); }
+  .rec { white-space: nowrap; font: 600 10px/1 var(--sans); color: var(--rec-text); background: var(--honey-soft); border-radius: 4px; padding: 3px 5px; }
+  .opt p { margin: 0; font-size: 11.5px; color: var(--ink2); }
+  .kbd { margin-left: auto; font: 400 10px/1 var(--mono); color: var(--ink3); border: 1px solid var(--line2); border-radius: 4px; padding: 2px 5px; }
+  .composer { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; align-items: center; }
+  .composer .note { flex: 1; color: var(--quiet); font-size: 12px; }
+  .ask { background: var(--ink); color: #fff; border-radius: 7px; padding: 6px 12px; font-weight: 600; font-size: 12px; }
+  .letter { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: var(--ink); color: #fff; font: 600 11px/1 var(--sans); flex: none; }
+  .letter.soft { background: var(--side); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line2); }
+</style>
+</head>
+<body>
+<template data-variant="multi" data-name="1 · Variants with several screens" data-position="One thin row: the letter sits inside the thumbnail, the title of the screen on show sits in the box header, next to the set name; other captions on hover" data-right-when="Most asks: the options already explain each variant" data-costs="You see a caption only on hover">
+<style>
+  .vbar { flex: none; display: flex; flex-direction: column; gap: 0; border-bottom: 1px solid var(--line); background: #fafafa; }
+  .vrow { display: flex; gap: 6px; align-items: center; padding: 8px 12px 6px; }
+  .vt { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; min-width: 34px; padding: 0 10px; justify-content: center; border: 1px solid var(--line2); background: #fff; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--ink2); }
+  .vt.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: var(--honey-soft); color: var(--ink); }
+  .vt .star { color: var(--rec-text); font-size: 10px; }
+  .vt .n { font: 400 10.5px/1 var(--mono); color: var(--quiet); }
+  .vt.on .n { color: var(--rec-text); }
+  .vt.shared { font-weight: 500; font-size: 12px; color: var(--ink3); }
+  .vt.num { font-weight: 500; }
+  .sep { width: 1px; height: 20px; background: var(--line2); margin: 0 4px; }
+  .keys { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .vcap { display: flex; align-items: center; gap: 10px; padding: 0 12px 8px; font-size: 12.5px; color: var(--ink2); min-height: 22px; }
+  .vcap b { color: var(--ink); font-weight: 600; }
+  .pager { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .pager .pp { display: flex; gap: 4px; }
+  .pager .pp span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--quiet); }
+  .pager .pp span.on { color: var(--ink); font-weight: 600; }
+  .pager .th { width: 44px; height: 28px; }
+  .pager .pcount { font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .arrow { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line2); background: #fff; display: grid; place-items: center; font-size: 11px; color: var(--ink2); }
+  .dlgwrap { position: relative; width: 100%; max-width: 720px; }
+  .dlgwrap .shade { position: absolute; inset: 0; background: rgb(0 0 0 / .35); border-radius: 6px; display: grid; place-items: center; }
+  .dlgwrap .dlg { width: 46%; background: #fff; border-radius: 8px; padding: 12px 14px; font-size: 9.5px; color: var(--ink2); display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgb(0 0 0 / .2); }
+  .dlgwrap .dlg b { color: var(--ink); font-size: 11px; }
+  .dlgwrap .dlg .btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+  .dlgwrap .dlg .btns span { border: 1px solid var(--line2); border-radius: 4px; padding: 2px 6px; }
+  .dlgwrap .dlg .btns span.p { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .callout { position: absolute; right: 14px; top: 12px; max-width: 240px; background: #fff; border: 1px dashed var(--line2); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; color: var(--ink3); line-height: 1.4; }
+  .callout b { color: var(--ink); }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="nowt"><b>C2</b>Riepilogo dopo la sync, con l'avviso in cima</span><span class="full">Open full size ↗</span></div>
+    <style>
+  .srow { display: flex; gap: 4px; align-items: flex-end; padding: 10px 12px 6px; overflow: hidden; }
+  .sc { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; }
+  .sc .th { width: 58px; height: 36px; }
+  .sc .lab { font: 600 11.5px/1 var(--sans); color: var(--ink3); display: flex; gap: 3px; align-items: center; }
+  .sc.on { background: var(--honey-soft); }
+  .sc.on .lab { color: var(--ink); }
+  .sc .star { color: var(--rec-text); font-size: 9px; }
+  .gap { width: 8px; flex: none; }
+  .sep3 { width: 1px; align-self: stretch; background: var(--line2); margin: 4px 6px; flex: none; }
+  .sc.shared .lab { font-weight: 500; }
+  .cap3 { display: flex; align-items: center; gap: 10px; padding: 2px 12px 9px; font-size: 12.5px; color: var(--ink2); }
+  .cap3 b { color: var(--ink); font-weight: 600; }
+  .cap3 .pos { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .srow { overflow: visible; position: relative; z-index: 4; }
+  .vbar { overflow: visible; position: relative; z-index: 4; }
+  .srow.compact { gap: 2px; }
+  .srow.compact .sc { padding: 3px; }
+  .srow.compact .sc .th { width: 40px; height: 26px; }
+  .srow.compact .sc .lab { font-size: 10.5px; }
+  .sc { position: relative; }
+  .tip { position: absolute; top: calc(100% + 2px); left: 0; z-index: 3; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip b { font-weight: 600; margin-right: 4px; }
+  .inview { margin-left: auto; white-space: nowrap; font: 600 10px/1 var(--sans); color: var(--ink2); border: 1px solid var(--line2); border-radius: 4px; padding: 3px 5px; display: inline-flex; gap: 4px; align-items: center; }
+  .inview i { width: 6px; height: 6px; border-radius: 50%; background: var(--honey500); }
+  .opt.seen { border-color: var(--line2); background: #fcfcfc; }
+  .opt .kbd { margin-left: 6px; }
+</style><style>
+  .vbar5 { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #fafafa; position: relative; z-index: 4; }
+  .t5 { position: relative; padding: 2px; border-radius: 7px; flex: none; }
+  .t5 .th { width: 46px; height: 29px; }
+  .t5.on { background: var(--honey-soft); }
+  .t5.on .th { box-shadow: 0 0 0 2px var(--honey500); }
+  .t5.shared .th { box-shadow: 0 0 0 1px var(--line2); opacity: .85; }
+  .t5 .bd { position: absolute; left: 2px; top: 2px; z-index: 2; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 3px; background: rgb(255 255 255 / .94); box-shadow: 0 0 0 1px var(--line2); font: 700 9px/13px var(--sans); color: var(--ink); text-align: center; }
+  .t5.on .bd { background: var(--ink); color: #fff; box-shadow: none; }
+  .g5 { width: 6px; flex: none; }
+  .s5 { width: 1px; height: 26px; background: var(--line2); margin: 0 6px; flex: none; }
+  .tip5 { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip5 b { font-weight: 600; margin-right: 4px; }
+  .pos5 { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .nowt { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink2); padding-left: 8px; border-left: 1px solid var(--line2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nowt b { color: var(--ink); font-weight: 600; }
+</style><div class="vbar5"><div class="t5"><div class="th"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i><span class="bd">A1</span></div></div><div class="t5"><div class="th dlg"><span class="bd">A2</span></div><span class="tip5"><b>A2</b>Dopo il clic: conferma della chiusura</span></div><span class="g5"></span><div class="t5"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i><span class="bd">B</span></div></div><span class="g5"></span><div class="t5"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i><span class="bd">C1</span></div></div><div class="t5 on"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i><span class="bd">C2</span></div></div><div class="t5"><div class="th dlg"><span class="bd">C3</span></div></div><span class="s5"></span><div class="t5 shared"><div class="th dlg"></div></div><span class="pos5"><span class="arrow">‹</span>5 / 7<span class="arrow">›</span></span></div>
+    <div class="stage"><div class="cur"><div class="cur-nav"><b>Curatool</b><span>Workspace</span><span>Procedure</span><span>Calendario</span><span>Import-Export</span><span>Casella PEC</span></div><div class="cur-body"><div class="crumb">STUDIO / IMPORT-EXPORT</div><h4>Sincronizzazione delle cartelle</h4>
+        <div class="sync"><div class="ok">Sincronizzazione completata: 10 file nuovi in 4 procedure.</div>
+        <div class="list"><div>112/2024 · Beta Esempio S.p.A.</div><div class="hl">57/2026 · Alfa Prova S.r.l. · Da decidere</div><div>203/2025 · Gamma Prova S.n.c.</div><div>18/2026 · Delta Fittizia S.r.l.</div></div>
+        <div class="doc"><b style="color:var(--ink)">2026-11-03 Decreto di chiusura.pdf</b><div class="paper">TRIBUNALE DI ESEMPIO<br>… DICHIARA LA CHIUSURA della procedura …</div><span>È un decreto di chiusura di LG 57/2026? <b style="color:var(--ink)">Chiudi la procedura</b></span></div></div></div></div><div class="callout"><b>The title of the screen on show</b> sits in the header line, which has room: no extra height. Hover another thumbnail for its caption.</div><span class="comment">Comment</span></div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="on">1</span><span class="done">✓</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Dove mostriamo l'avviso con «Chiudi la procedura»?</h2>
+  <div class="need">Arriva un decreto di chiusura su una procedura attiva. Dove Curatool mostra l'avviso con «Chiudi la procedura»?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span><span class="letter">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Un banner giallo in alto nella pagina della procedura, con «Lascia attiva» e «Chiudi la procedura».</p></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft">B</span>Riga in Verifica di coerenza<span class="kbd">2</span></div></div><div class="opt seen"><div class="opt-h"><span class="radio"></span><span class="letter soft">C</span>Riepilogo della sync<span class="inview"><i></i>On screen</span><span class="kbd">3</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<template data-variant="full" data-name="2 · Twelve screens" data-position="The largest set (12 images) fits in one row at this size, with no scroll" data-right-when="Wide comparisons" data-costs="Small pictures: you find a screen by its letter">
+<style>
+  .vbar { flex: none; display: flex; flex-direction: column; gap: 0; border-bottom: 1px solid var(--line); background: #fafafa; }
+  .vrow { display: flex; gap: 6px; align-items: center; padding: 8px 12px 6px; }
+  .vt { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; min-width: 34px; padding: 0 10px; justify-content: center; border: 1px solid var(--line2); background: #fff; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--ink2); }
+  .vt.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: var(--honey-soft); color: var(--ink); }
+  .vt .star { color: var(--rec-text); font-size: 10px; }
+  .vt .n { font: 400 10.5px/1 var(--mono); color: var(--quiet); }
+  .vt.on .n { color: var(--rec-text); }
+  .vt.shared { font-weight: 500; font-size: 12px; color: var(--ink3); }
+  .vt.num { font-weight: 500; }
+  .sep { width: 1px; height: 20px; background: var(--line2); margin: 0 4px; }
+  .keys { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .vcap { display: flex; align-items: center; gap: 10px; padding: 0 12px 8px; font-size: 12.5px; color: var(--ink2); min-height: 22px; }
+  .vcap b { color: var(--ink); font-weight: 600; }
+  .pager { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .pager .pp { display: flex; gap: 4px; }
+  .pager .pp span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--quiet); }
+  .pager .pp span.on { color: var(--ink); font-weight: 600; }
+  .pager .th { width: 44px; height: 28px; }
+  .pager .pcount { font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .arrow { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line2); background: #fff; display: grid; place-items: center; font-size: 11px; color: var(--ink2); }
+  .dlgwrap { position: relative; width: 100%; max-width: 720px; }
+  .dlgwrap .shade { position: absolute; inset: 0; background: rgb(0 0 0 / .35); border-radius: 6px; display: grid; place-items: center; }
+  .dlgwrap .dlg { width: 46%; background: #fff; border-radius: 8px; padding: 12px 14px; font-size: 9.5px; color: var(--ink2); display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgb(0 0 0 / .2); }
+  .dlgwrap .dlg b { color: var(--ink); font-size: 11px; }
+  .dlgwrap .dlg .btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+  .dlgwrap .dlg .btns span { border: 1px solid var(--line2); border-radius: 4px; padding: 2px 6px; }
+  .dlgwrap .dlg .btns span.p { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .callout { position: absolute; right: 14px; top: 12px; max-width: 240px; background: #fff; border: 1px dashed var(--line2); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; color: var(--ink3); line-height: 1.4; }
+  .callout b { color: var(--ink); }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="nowt"><b>F1</b>Badge rosso sulla procedura nella lista</span><span class="full">Open full size ↗</span></div>
+    <style>
+  .srow { display: flex; gap: 4px; align-items: flex-end; padding: 10px 12px 6px; overflow: hidden; }
+  .sc { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; }
+  .sc .th { width: 58px; height: 36px; }
+  .sc .lab { font: 600 11.5px/1 var(--sans); color: var(--ink3); display: flex; gap: 3px; align-items: center; }
+  .sc.on { background: var(--honey-soft); }
+  .sc.on .lab { color: var(--ink); }
+  .sc .star { color: var(--rec-text); font-size: 9px; }
+  .gap { width: 8px; flex: none; }
+  .sep3 { width: 1px; align-self: stretch; background: var(--line2); margin: 4px 6px; flex: none; }
+  .sc.shared .lab { font-weight: 500; }
+  .cap3 { display: flex; align-items: center; gap: 10px; padding: 2px 12px 9px; font-size: 12.5px; color: var(--ink2); }
+  .cap3 b { color: var(--ink); font-weight: 600; }
+  .cap3 .pos { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .srow { overflow: visible; position: relative; z-index: 4; }
+  .vbar { overflow: visible; position: relative; z-index: 4; }
+  .srow.compact { gap: 2px; }
+  .srow.compact .sc { padding: 3px; }
+  .srow.compact .sc .th { width: 40px; height: 26px; }
+  .srow.compact .sc .lab { font-size: 10.5px; }
+  .sc { position: relative; }
+  .tip { position: absolute; top: calc(100% + 2px); left: 0; z-index: 3; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip b { font-weight: 600; margin-right: 4px; }
+  .inview { margin-left: auto; white-space: nowrap; font: 600 10px/1 var(--sans); color: var(--ink2); border: 1px solid var(--line2); border-radius: 4px; padding: 3px 5px; display: inline-flex; gap: 4px; align-items: center; }
+  .inview i { width: 6px; height: 6px; border-radius: 50%; background: var(--honey500); }
+  .opt.seen { border-color: var(--line2); background: #fcfcfc; }
+  .opt .kbd { margin-left: 6px; }
+</style><style>
+  .vbar5 { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #fafafa; position: relative; z-index: 4; }
+  .t5 { position: relative; padding: 2px; border-radius: 7px; flex: none; }
+  .t5 .th { width: 46px; height: 29px; }
+  .t5.on { background: var(--honey-soft); }
+  .t5.on .th { box-shadow: 0 0 0 2px var(--honey500); }
+  .t5.shared .th { box-shadow: 0 0 0 1px var(--line2); opacity: .85; }
+  .t5 .bd { position: absolute; left: 2px; top: 2px; z-index: 2; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 3px; background: rgb(255 255 255 / .94); box-shadow: 0 0 0 1px var(--line2); font: 700 9px/13px var(--sans); color: var(--ink); text-align: center; }
+  .t5.on .bd { background: var(--ink); color: #fff; box-shadow: none; }
+  .g5 { width: 6px; flex: none; }
+  .s5 { width: 1px; height: 26px; background: var(--line2); margin: 0 6px; flex: none; }
+  .tip5 { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip5 b { font-weight: 600; margin-right: 4px; }
+  .pos5 { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .nowt { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink2); padding-left: 8px; border-left: 1px solid var(--line2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nowt b { color: var(--ink); font-weight: 600; }
+</style><div class="vbar5"><div class="t5"><div class="th"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i><span class="bd">A</span></div></div><span class="g5"></span><div class="t5"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i><span class="bd">B</span></div></div><span class="g5"></span><div class="t5"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i><span class="bd">C1</span></div></div><div class="t5"><div class="th dlg"><span class="bd">C2</span></div></div><span class="g5"></span><div class="t5"><div class="th"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i><span class="bd">D</span></div></div><span class="g5"></span><div class="t5"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i><span class="bd">E1</span></div></div><div class="t5"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i><span class="bd">E2</span></div></div><span class="g5"></span><div class="t5 on"><div class="th dlg"><span class="bd">F1</span></div></div><div class="t5"><div class="th"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i><span class="bd">F2</span></div></div><div class="t5"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i><span class="bd">F3</span></div></div><span class="s5"></span><div class="t5 shared"><div class="th"><i class="g" style="top:5px"></i><i style="top:13px;right:28px"></i><i style="top:19px;right:28px"></i><i style="top:25px;right:28px"></i><i class="y" style="top:13px;left:40px;height:20px;background:#eee"></i></div></div><div class="t5 shared"><div class="th dlg"></div></div><span class="pos5"><span class="arrow">‹</span>8 / 12<span class="arrow">›</span></span></div>
+    <div class="stage"><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="ban"><div><b>Nella cartella c'è un decreto di chiusura, ma la procedura è ancora attiva</b>Decreto del 03/11/2026, trovato dalla sincronizzazione l'11/11/2026, 08:12.</div><span class="act">Chiudi la procedura</span></div>
+        <div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><div class="callout"><b>All thumbnails have one size</b> and sit on one line, so they always align.</div><span class="comment">Comment</span></div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="on">1</span><span class="done">✓</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Dove mostriamo l'avviso con «Chiudi la procedura»?</h2>
+  <div class="need">Arriva un decreto di chiusura su una procedura attiva. Dove Curatool mostra l'avviso con «Chiudi la procedura»?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span><span class="letter">A</span>Banner nella procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Un banner giallo in alto nella pagina della procedura, con «Lascia attiva» e «Chiudi la procedura».</p></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft">B</span>Riga in Verifica di coerenza<span class="kbd">2</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft">C</span>Riepilogo della sync<span class="kbd">3</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft">D</span>Notifica nella campanella<span class="kbd">4</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span><span class="letter soft">E</span>Email al curatore<span class="kbd">5</span></div></div><div class="opt seen"><div class="opt-h"><span class="radio"></span><span class="letter soft">F</span>Badge sulla procedura<span class="inview"><i></i>On screen</span><span class="kbd">6</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<template data-variant="plain" data-name="3 · Screens that are not variants" data-position="No lettered captions: no badges. Images every decision shares sit after the line, with no badge" data-right-when="Screens that explain the decision" data-costs="A shared image has no word on it; the line and the hover say it">
+<style>
+  .vbar { flex: none; display: flex; flex-direction: column; gap: 0; border-bottom: 1px solid var(--line); background: #fafafa; }
+  .vrow { display: flex; gap: 6px; align-items: center; padding: 8px 12px 6px; }
+  .vt { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; min-width: 34px; padding: 0 10px; justify-content: center; border: 1px solid var(--line2); background: #fff; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--ink2); }
+  .vt.on { border-color: var(--honey500); box-shadow: inset 0 0 0 1px var(--honey500); background: var(--honey-soft); color: var(--ink); }
+  .vt .star { color: var(--rec-text); font-size: 10px; }
+  .vt .n { font: 400 10.5px/1 var(--mono); color: var(--quiet); }
+  .vt.on .n { color: var(--rec-text); }
+  .vt.shared { font-weight: 500; font-size: 12px; color: var(--ink3); }
+  .vt.num { font-weight: 500; }
+  .sep { width: 1px; height: 20px; background: var(--line2); margin: 0 4px; }
+  .keys { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .vcap { display: flex; align-items: center; gap: 10px; padding: 0 12px 8px; font-size: 12.5px; color: var(--ink2); min-height: 22px; }
+  .vcap b { color: var(--ink); font-weight: 600; }
+  .pager { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .pager .pp { display: flex; gap: 4px; }
+  .pager .pp span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--quiet); }
+  .pager .pp span.on { color: var(--ink); font-weight: 600; }
+  .pager .th { width: 44px; height: 28px; }
+  .pager .pcount { font: 400 11px/1 var(--mono); color: var(--quiet); }
+  .arrow { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line2); background: #fff; display: grid; place-items: center; font-size: 11px; color: var(--ink2); }
+  .dlgwrap { position: relative; width: 100%; max-width: 720px; }
+  .dlgwrap .shade { position: absolute; inset: 0; background: rgb(0 0 0 / .35); border-radius: 6px; display: grid; place-items: center; }
+  .dlgwrap .dlg { width: 46%; background: #fff; border-radius: 8px; padding: 12px 14px; font-size: 9.5px; color: var(--ink2); display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgb(0 0 0 / .2); }
+  .dlgwrap .dlg b { color: var(--ink); font-size: 11px; }
+  .dlgwrap .dlg .btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+  .dlgwrap .dlg .btns span { border: 1px solid var(--line2); border-radius: 4px; padding: 2px 6px; }
+  .dlgwrap .dlg .btns span.p { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .callout { position: absolute; right: 14px; top: 12px; max-width: 240px; background: #fff; border: 1px dashed var(--line2); border-radius: 8px; padding: 8px 10px; font-size: 11.5px; color: var(--ink3); line-height: 1.4; }
+  .callout b { color: var(--ink); }
+</style>
+<div class="app">
+<aside class="side">
+  <div class="side-head"><span class="brand"><span class="mark"></span>waggle</span><span class="needs">Needs you <span class="count">5</span></span></div>
+  <div class="sec">Needs you · 5</div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">How do we give more space to the tool details?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Bozza delle tardive: correggiamo questi tre punti del testo?</div><div class="row-m">Curatool brain · 14h ago</div></div></div>
+  <div class="row"><span class="dot"></span><div><div class="row-t">Which poster design do you want for the awards night?</div><div class="row-m">Session closed</div></div></div>
+  <div class="row sel"><span class="dot"></span><div><div class="row-t">Decreto di chiusura: dove mostriamo «Chiudi la procedura»?</div><div class="row-m">Curatool brain · Claude Code · 14h ago</div></div></div>
+  <div class="side-foot">Connected · 2 sessions · 1 working</div>
+</aside>
+<section class="main"><div class="top">Curatool brain · arrived 11 Nov 20:08<span class="wait">Waiting 14h 20m</span></div>
+  <div class="box">
+    <div class="box-h"><span class="tab">▣ Varianti S7</span><span class="ver">v1</span><span class="nowt">Riga nel pannello «Verifica di coerenza»</span><span class="full">Open full size ↗</span></div>
+    <style>
+  .srow { display: flex; gap: 4px; align-items: flex-end; padding: 10px 12px 6px; overflow: hidden; }
+  .sc { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; }
+  .sc .th { width: 58px; height: 36px; }
+  .sc .lab { font: 600 11.5px/1 var(--sans); color: var(--ink3); display: flex; gap: 3px; align-items: center; }
+  .sc.on { background: var(--honey-soft); }
+  .sc.on .lab { color: var(--ink); }
+  .sc .star { color: var(--rec-text); font-size: 9px; }
+  .gap { width: 8px; flex: none; }
+  .sep3 { width: 1px; align-self: stretch; background: var(--line2); margin: 4px 6px; flex: none; }
+  .sc.shared .lab { font-weight: 500; }
+  .cap3 { display: flex; align-items: center; gap: 10px; padding: 2px 12px 9px; font-size: 12.5px; color: var(--ink2); }
+  .cap3 b { color: var(--ink); font-weight: 600; }
+  .cap3 .pos { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .srow { overflow: visible; position: relative; z-index: 4; }
+  .vbar { overflow: visible; position: relative; z-index: 4; }
+  .srow.compact { gap: 2px; }
+  .srow.compact .sc { padding: 3px; }
+  .srow.compact .sc .th { width: 40px; height: 26px; }
+  .srow.compact .sc .lab { font-size: 10.5px; }
+  .sc { position: relative; }
+  .tip { position: absolute; top: calc(100% + 2px); left: 0; z-index: 3; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip b { font-weight: 600; margin-right: 4px; }
+  .inview { margin-left: auto; white-space: nowrap; font: 600 10px/1 var(--sans); color: var(--ink2); border: 1px solid var(--line2); border-radius: 4px; padding: 3px 5px; display: inline-flex; gap: 4px; align-items: center; }
+  .inview i { width: 6px; height: 6px; border-radius: 50%; background: var(--honey500); }
+  .opt.seen { border-color: var(--line2); background: #fcfcfc; }
+  .opt .kbd { margin-left: 6px; }
+</style><style>
+  .vbar5 { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #fafafa; position: relative; z-index: 4; }
+  .t5 { position: relative; padding: 2px; border-radius: 7px; flex: none; }
+  .t5 .th { width: 46px; height: 29px; }
+  .t5.on { background: var(--honey-soft); }
+  .t5.on .th { box-shadow: 0 0 0 2px var(--honey500); }
+  .t5.shared .th { box-shadow: 0 0 0 1px var(--line2); opacity: .85; }
+  .t5 .bd { position: absolute; left: 2px; top: 2px; z-index: 2; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 3px; background: rgb(255 255 255 / .94); box-shadow: 0 0 0 1px var(--line2); font: 700 9px/13px var(--sans); color: var(--ink); text-align: center; }
+  .t5.on .bd { background: var(--ink); color: #fff; box-shadow: none; }
+  .g5 { width: 6px; flex: none; }
+  .s5 { width: 1px; height: 26px; background: var(--line2); margin: 0 6px; flex: none; }
+  .tip5 { position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; white-space: nowrap; background: var(--ink); color: #fff; font: 500 11px/1 var(--sans); padding: 6px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+  .tip5 b { font-weight: 600; margin-right: 4px; }
+  .pos5 { margin-left: auto; display: flex; gap: 6px; align-items: center; font: 400 11px/1 var(--mono); color: var(--quiet); }
+</style><style>
+  .nowt { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink2); padding-left: 8px; border-left: 1px solid var(--line2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nowt b { color: var(--ink); font-weight: 600; }
+</style><div class="vbar5"><div class="t5 on"><div class="th"><i style="top:5px;right:24px"></i><i class="y" style="top:11px"></i><i style="top:24px"></i><i style="top:31px;right:16px"></i></div></div><span class="g5"></span><div class="t5"><div class="th"><i class="y" style="top:4px"></i><i style="top:16px"></i><i style="top:23px;right:20px"></i><i style="top:30px"></i></div></div><span class="s5"></span><div class="t5 shared"><div class="th dlg"></div><span class="tip5"><b>Comune</b>Legenda dei colori</span></div><span class="pos5"><span class="arrow">‹</span>1 / 3<span class="arrow">›</span></span></div>
+    <div class="stage"><div class="cur"><div class="cur-nav"><b>Alfa Prova S.r.l.</b><i>LG 57/2026</i><span>Panoramica</span><span>Checklist</span><span>Rapporti</span><span>Stato passivo</span><span>Vendite</span><span>Archivio</span></div><div class="cur-body"><div class="crumb">WORKSPACE / PROCEDURE / LG 57/2026</div><h4>Alfa Prova S.r.l. in liquidazione giudiziale</h4>
+        <div class="chk"><b style="color:var(--ink)">Verifica di coerenza — 2 punti da controllare</b><div class="r">In archivio c'è un decreto di chiusura del 03/11/2026, ma la procedura è ancora attiva.<span class="act">Chiudi la procedura</span></div><div class="r">L'ultimo rapporto risulta di 42 giorni fa.</div></div><div class="grid3"><div><span>Tribunale</span>Tribunale di Esempio</div><div><span>Giudice delegato</span>Dott.ssa Carla Esempio</div><div><span>Data apertura</span>12/01/2026</div><div><span>Programma</span>Approvato il 14/04/2026</div><div><span>Ultimo rapporto</span>n. 2 · 30/09/2026</div><div><span>Conti</span>1 · 12.480,00 €</div></div><div class="todo"><b>Da fare</b><span>Rapporto riepilogativo n. 3 · entro il 31/03/2027</span><span>Rendiconto finale · da depositare</span></div></div></div><div class="callout"><b>Badges only for letters.</b> The hover says «Comune» for the images after the line.</div><span class="comment">Comment</span></div>
+  </div>
+</section><aside class="panel">
+  <div class="ptabs"><span class="on">Decision</span><span>Conversation</span><span>Comments</span></div>
+  <div class="steps"><span class="done">✓</span><span class="on">2</span><span class="done">✓</span><span>4</span><span class="sendp">Send</span></div>
+  <h2 class="q">Se il curatore chiude una procedura per errore, la può riaprire?</h2>
+  <div class="need">Una procedura chiusa per errore va riaperta. Chi lo può fare?</div>
+  <div class="lbl">Your choice</div>
+  <div class="opt on"><div class="opt-h"><span class="radio"></span>Sì, dalla procedura <span class="rec">★ Recommended</span><span class="kbd">1</span></div><p>Sì: «Riapri la procedura» nella pagina della procedura chiusa.</p></div><div class="opt"><div class="opt-h"><span class="radio"></span>No, solo noi<span class="kbd">2</span></div></div><div class="opt"><div class="opt-h"><span class="radio"></span>Chiedi a Julien<span class="kbd">3</span></div></div>
+  <div class="composer"><span class="note">Ask for…</span><span class="ask">Ask</span></div>
+</aside></div>
+</template>
+
+<!-- ===== Canvas chrome below: no need to edit. It stays outside the project's design system on purpose. ===== -->
+<style>
+  :root { color-scheme: light; }
+  body.mc-canvas { margin: 0; background: #e9e9ec; color: #1d1d20; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  /* The page's own tokens may lock html/body to the window (a full-screen app); the canvas must still scroll. */
+  html:has(> body.mc-canvas), body.mc-canvas { height: auto; overflow: visible; }
+  .mc-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; background: #f7f7f8; border-bottom: 1px solid #d4d4d8; }
+  .mc-bar h1 { margin: 0; font-size: 14px; font-weight: 600; }
+  .mc-bar .mc-axis { color: #5f5f66; }
+  .mc-group { display: flex; gap: 2px; padding: 2px; background: #e4e4e7; border-radius: 7px; }
+  .mc-group button { border: 0; background: transparent; padding: 4px 10px; border-radius: 5px; font: inherit; color: #3f3f46; cursor: pointer; min-height: 28px; }
+  .mc-group button[aria-pressed="true"] { background: #fff; color: #111; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+  .mc-group button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+  .mc-board { padding: 24px; overflow-x: auto; }
+  .mc-row { display: flex; gap: 32px; align-items: flex-start; width: max-content; }
+  .mc-row + .mc-row { margin-top: 40px; }
+  .mc-frame figcaption { margin-bottom: 8px; }
+  .mc-frame figcaption strong { font-size: 14px; }
+  .mc-frame figcaption span { color: #5f5f66; margin-left: 6px; }
+  .mc-frame { margin: 0; }
+  .mc-frame iframe { display: block; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.08); }
+  .mc-notes { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; color: #3f3f46; max-width: 100%; }
+  .mc-notes dt { color: #71717a; }
+  .mc-notes dd { margin: 0; }
+  /* ?export=1: one bare frame, centred, for screenshots (bash shoot.sh) */
+  .mc-export .mc-bar, .mc-export figcaption, .mc-export .mc-notes { display: none; }
+  .mc-export .mc-board { padding: 0; }
+  .mc-export .mc-row { width: auto; justify-content: center; }
+  .mc-export .mc-frame iframe { border-radius: 0; box-shadow: none; }
+</style>
+<script>
+(() => {
+  const meta = JSON.parse(document.getElementById("mockup-meta").textContent);
+  const tokens = document.getElementById("tokens").outerHTML;
+  const variants = [...document.querySelectorAll("template[data-variant]")];
+  const params = new URLSearchParams(location.search);
+  const view = { ...meta.view };
+  for (const k of ["theme", "device", "v", "state", "zoom", "export"]) if (params.has(k)) view[k] = params.get(k);
+
+  document.body.classList.add("mc-canvas");
+  if (view.export) document.body.classList.add("mc-export");
+  document.title = `${meta.title} · mockup`;
+
+  const bar = document.createElement("header");
+  bar.className = "mc-bar";
+  bar.innerHTML = `<h1></h1><span class="mc-axis"></span>`;
+  bar.querySelector("h1").textContent = meta.title;
+  bar.querySelector(".mc-axis").textContent = `Axis: ${meta.axis}`;
+  const board = document.createElement("div");
+  board.className = "mc-board";
+  document.body.append(bar, board);
+
+  function group(label, key, values) {
+    if (values.length < 2) return;
+    const g = document.createElement("div");
+    g.className = "mc-group";
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label);
+    for (const [value, text] of values) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = text;
+      b.dataset.key = key;
+      b.dataset.value = value;
+      b.addEventListener("click", () => { view[key] = value; sync(); });
+      g.append(b);
+    }
+    bar.append(g);
+  }
+  const themes = meta.themes.map((t) => [t, t[0].toUpperCase() + t.slice(1)]);
+  if (meta.themes.length > 1) themes.push(["both", "Both"]);
+  group("Theme", "theme", themes);
+  group("Device", "device", Object.keys(meta.devices).map((d) => [d, d[0].toUpperCase() + d.slice(1)]));
+  if (!view.state && meta.states?.length) view.state = meta.states[0];
+  group("State", "state", (meta.states || []).map((s) => [s, s[0].toUpperCase() + s.slice(1)]));
+  group("Variants", "v", [["all", "All"], ...variants.map((t) => [t.dataset.variant, t.dataset.name])]);
+
+  function frame(t, theme) {
+    const [w, h] = meta.devices[view.device] || Object.values(meta.devices)[0];
+    const fig = document.createElement("figure");
+    fig.className = "mc-frame";
+    fig.style.width = `${w}px`;
+    const cap = document.createElement("figcaption");
+    cap.innerHTML = "<strong></strong><span></span>";
+    cap.querySelector("strong").textContent = t.dataset.name;
+    cap.querySelector("span").textContent = [t.dataset.position, view.theme === "both" ? theme : ""].filter(Boolean).join(", ");
+    const iframe = document.createElement("iframe");
+    iframe.title = `${t.dataset.name}, ${theme}`;
+    iframe.width = w;
+    iframe.height = h;
+    iframe.srcdoc = `<!doctype html><html class="${theme === "dark" ? "dark" : ""}" data-state="${view.state || ""}"><head><meta charset="utf-8"><meta name="viewport" content="width=${w}">${tokens}</head><body>${t.innerHTML}</body></html>`;
+    iframe.addEventListener("load", () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      // Frames stay at device height and scroll inside, like a real screen (fixed docks stay visible).
+      // "grow": true in the meta makes them as tall as the content instead (long pages, landings).
+      if (!meta.grow) return;
+      const fit = () => { iframe.height = Math.max(h, doc.documentElement.scrollHeight); };
+      fit();
+      new ResizeObserver(fit).observe(doc.body);
+      doc.querySelectorAll("img").forEach((img) => img.addEventListener("load", fit));
+    });
+    fig.append(cap, iframe);
+    if (t.dataset.rightWhen || t.dataset.costs) {
+      const dl = document.createElement("dl");
+      dl.className = "mc-notes";
+      for (const [label, value] of [["Right when", t.dataset.rightWhen], ["Costs", t.dataset.costs]]) {
+        if (!value) continue;
+        const dt = document.createElement("dt"); dt.textContent = label;
+        const dd = document.createElement("dd"); dd.textContent = value;
+        dl.append(dt, dd);
+      }
+      fig.append(dl);
+    }
+    return fig;
+  }
+
+  function sync() {
+    const url = new URL(location.href);
+    for (const k of ["theme", "device", "v", "state"]) if (view[k]) url.searchParams.set(k, view[k]);
+    try { history.replaceState(null, "", url); } catch {}
+    bar.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(view[b.dataset.key] === b.dataset.value)));
+    board.replaceChildren();
+    board.style.zoom = view.zoom || 1;
+    const shown = view.v === "all" ? variants : variants.filter((t) => t.dataset.variant === view.v);
+    const rows = view.theme === "both" ? meta.themes : [view.theme];
+    for (const theme of rows) {
+      const row = document.createElement("div");
+      row.className = "mc-row";
+      for (const t of shown) row.append(frame(t, theme));
+      board.append(row);
+    }
+    if (!shown.length) console.error(`mockup canvas: no variant with id "${view.v}"`);
+  }
+
+  addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= variants.length) { view.v = variants[n - 1].dataset.variant; sync(); }
+    if (e.key === "0") { view.v = "all"; sync(); }
+  });
+  sync();
+  console.log(`mockup canvas: ${variants.length} variants, theme=${view.theme}, device=${view.device}, state=${view.state || "-"}, v=${view.v}`);
+})();
+</script>
+</body>
+</html>

@@ -653,12 +653,11 @@ struct LiveArtifactBoxView: View {
     private func toolbar(for tab: ArtifactTab) -> some View {
         let tools = model.tools(for: tab)
         if !tools.isEmpty {
-            let hasFilmstrip = model.showsCaptureStage(for: tab) && (model.commentsStore?.galleryScreens.count ?? 0) > 1
             CanvasToolbarView(tools: tools, mode: model.mode, showsKeys: false) { target in
                 hasFocus = true
                 if target == .interact { model.enterInteractMode() } else { Task { await model.startComment(openFullSize: onOpen) } }
             }
-            .padding(.bottom, Self.toolbarBottomGap + (hasFilmstrip ? ScreenshotFilmstrip.height : (model.isFlippable(tab) ? (boxWidth >= ScreenSetBoxView.thumbnailWidth ? 92 : 68) : 0)))
+            .padding(.bottom, Self.toolbarBottomGap)
         }
     }
 
@@ -668,7 +667,7 @@ struct LiveArtifactBoxView: View {
         model.tools(for: tab).isEmpty ? padding : max(padding, CanvasToolbarView.imageBottomInset(bottomGap: Self.toolbarBottomGap))
     }
 
-    /// How far the toolbar floats above the bottom of the stage (a filmstrip or a strip of thumbnails sits below).
+    /// How far the toolbar floats above the bottom of the stage.
     static let toolbarBottomGap: CGFloat = 14
 
     private func webHeight(_ tab: ArtifactTab) -> CGFloat? {
@@ -688,6 +687,9 @@ struct LiveArtifactBoxView: View {
             } else if let tab = model.selectedTab {
                 ArtifactTabLabel(symbol: Self.symbol(tab.kind), title: Self.caption(tab), isOn: true)
                     .help(tab.title)
+            }
+            if model.selectedTab?.kind == .screenshots, let store = model.commentsStore {
+                ScreenTitleLabel(store: store)
             }
             if fillsHeight, let meta = versionLine {
                 Text(meta)
@@ -825,14 +827,14 @@ struct LiveArtifactBoxView: View {
                let capture = store.shownStill(revision: tab.revision), let image = store.imagesByCaptureId[capture.id] {
                 // WAG-311: Comment mode on a screenshot or a set: drag a region on the capture, as in full size.
                 VStack(spacing: 0) {
+                    if store.galleryScreens.count > 1 {
+                        ScreenRow(store: store, current: capture.id, onSelect: { store.selectCapture(id: $0) }, onStep: { model.stepScreen(by: $0) })
+                    }
                     CommentCaptureStageView(image: image, store: store, captureId: capture.id, initialScrollFraction: capture.scrollFraction)
                         .padding(EdgeInsets(top: 12, leading: 12, bottom: imageBottomInset(for: tab, padding: 12), trailing: 12))
                         .frame(height: fillsHeight ? nil : Self.commentStageHeight)
                         .frame(maxHeight: fillsHeight ? .infinity : nil)
                         .background(Theme.Colors.list)
-                    if store.galleryScreens.count > 1 {
-                        ScreenshotFilmstrip(store: store, onSelect: { store.selectCapture(id: $0) }, onStep: { model.stepScreen(by: $0) })
-                    }
                 }
             } else if let store = model.commentsStore, let still = store.shownStill(revision: tab.revision) {
                 if model.isFlippable(tab) {
