@@ -753,10 +753,27 @@ export type KnockSettingsInput = z.infer<typeof KnockSettingsInput>;
 // only validator, using the very same Zod schema this was generated from
 // (case.create etc. already parse with KnockAskInput and its siblings), so
 // the manifest and the validation it describes can never drift apart.
+// MCP tool annotations: hints a host shows before a call. All four are set on every tool, true or false,
+// because some directories reject a tool with a missing hint. openWorldHint is true only where the call
+// can reach the human through an opt-in connector (Telegram, Slack).
+export interface McpToolAnnotations {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
 export interface McpManifestTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  // Optional: a manifest from a daemon older than 2026-11-12 has none. Every tool here sets it.
+  annotations?: McpToolAnnotations;
+}
+
+function hints(readOnly: boolean, idempotent: boolean, openWorld: boolean): McpToolAnnotations {
+  // No tool deletes data: update with done closes a case and keeps it, and settings can be undone.
+  return { readOnlyHint: readOnly, destructiveHint: false, idempotentHint: idempotent, openWorldHint: openWorld };
 }
 
 // HAIL-48 amendment A1: forces `additionalProperties: true` on every tool's
@@ -788,31 +805,41 @@ function toolInputSchema(schema: z.ZodType): Record<string, unknown> {
 // adding a tool, is a live change: every open session picks it up on its
 // next reconnect (`notifications/tools/list_changed`), no restart needed.
 const WAGGLE_TOOLS: McpManifestTool[] = [
-  { name: "waggle_ask", description: KNOCK_ASK_DESCRIPTION, inputSchema: toolInputSchema(KnockAskInput) },
+  {
+    name: "waggle_ask",
+    description: KNOCK_ASK_DESCRIPTION,
+    inputSchema: toolInputSchema(KnockAskInput),
+    annotations: hints(false, false, true),
+  },
   {
     name: "waggle_check",
     description: KNOCK_CHECK_DESCRIPTION,
     inputSchema: toolInputSchema(KnockCheckInput),
+    annotations: hints(true, true, false),
   },
   {
     name: "waggle_update",
     description: KNOCK_UPDATE_DESCRIPTION,
     inputSchema: toolInputSchema(KnockUpdateInput),
+    annotations: hints(false, false, true),
   },
   {
     name: "waggle_guide",
     description: KNOCK_GUIDE_DESCRIPTION,
     inputSchema: toolInputSchema(KnockGuideInput),
+    annotations: hints(true, true, false),
   },
   {
     name: "waggle_settings",
     description: KNOCK_SETTINGS_DESCRIPTION,
     inputSchema: toolInputSchema(KnockSettingsInput),
+    annotations: hints(false, true, false),
   },
   {
     name: "waggle_themes",
     description: KNOCK_THEMES_DESCRIPTION,
     inputSchema: toolInputSchema(KnockThemesInput),
+    annotations: hints(false, true, false),
   },
 ];
 

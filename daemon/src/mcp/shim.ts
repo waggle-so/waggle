@@ -585,6 +585,8 @@ function toListedTool(tool: McpManifestTool): Tool {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema as Tool["inputSchema"],
+    // An old daemon's manifest has no annotations: list the tool without them.
+    ...(tool.annotations ? { annotations: tool.annotations } : {}),
   };
 }
 
