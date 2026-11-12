@@ -2,6 +2,10 @@
 
 Decided: 2026-11-10 · Case: c_c4d01e6f-6c26-4d80-a852-51b240bbc0d4
 
+> **Replaced in part (2026-11-12):** a lone letter ("b · Tap on the ring") no longer names a decision; it names
+> a variant of one decision. Numbers and letter-plus-number ("b1") still name a decision. See
+> `2026-11-12-variants-in-a-screenshots-set.md`.
+
 ## Question and choice
 A request with several decisions can carry one `screenshots` set. Today a decision maps to one image only:
 the anchor of its pick, else image K for decision K (WAG-352). With 4 decisions and 12 images, decision 2
