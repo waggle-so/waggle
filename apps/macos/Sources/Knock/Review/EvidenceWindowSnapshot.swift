@@ -42,10 +42,9 @@ enum EvidenceWindowSnapshot {
         let window = NSApp.windows
             .filter { $0.isVisible && $0.contentView != nil }
             .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
-        guard let view = window?.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let view = window?.contentView, let rep = EvidenceComposite.render(view) else { return }
         var pages: [(NSImage, NSRect)] = []
+        var shotWebs: [WKWebView] = []
         for web in webViews(in: view) where !web.isHidden && web.bounds.width > 1 {
             let config = WKSnapshotConfiguration()
             let length = await withTimeout(seconds: 3) {
@@ -60,9 +59,11 @@ enum EvidenceWindowSnapshot {
             log("snapshot \(String(describing: taken??.size))")
             if let shot = taken ?? nil {
                 pages.append((shot, view.convert(web.bounds, from: web)))
+                shotWebs.append(web)
             }
         }
-        guard let png = EvidenceComposite.png(content: view, cached: rep, pages: pages) else { return }
+        let keys = EvidenceComposite.keyedRenders(of: view, covering: shotWebs)
+        guard let png = EvidenceComposite.png(content: view, cached: rep, pages: pages, keys: keys) else { return }
         try? png.write(to: URL(fileURLWithPath: path))
     }
 
@@ -72,16 +73,103 @@ enum EvidenceWindowSnapshot {
 }
 
 /// Draws a window's cached AppKit tree and the web views' own snapshots into
-/// one PNG (HAIL-141c). The AppKit tree renders through `cacheDisplay` (which
-/// paints a WKWebView's layer as an opaque dark rectangle), and each web view's
-/// own snapshot is drawn over it. A snapshot's frame comes from
-/// `convert(_:from:)` in the content view's own coordinates, which are top-down
-/// when the view is flipped (SwiftUI's hosting view is); `unflipped` maps that
-/// frame into the bottom-up drawing space the snapshot is drawn in.
+/// one PNG (HAIL-141c). `cacheDisplay` cannot be trusted with a WKWebView's
+/// pixels (older macOS paints an opaque dark rectangle), so each web view's own
+/// snapshot fills its frame. A snapshot's frame comes from `convert(_:from:)`
+/// in the content view's own coordinates, which are top-down when the view is
+/// flipped (SwiftUI's hosting view is); `unflipped` maps that frame into the
+/// bottom-up drawing space the snapshot is drawn in.
+///
+/// What SwiftUI lays over the page (the Interact | Comment bar, the comment
+/// layer, pins, the still of Comment mode) must stay on top of the snapshot.
+/// Two more renders of the tree, with the page covered by a key colour each
+/// (`keyedRenders`), tell them apart: where both renders agree, the app draws
+/// over the page; where they differ, the page shows through, and by how much
+/// gives the overlay's coverage at its soft edges.
 @MainActor
 enum EvidenceComposite {
-    static func png(content: NSView, cached: NSBitmapImageRep, pages: [(NSImage, NSRect)]) -> Data? {
+    /// The two key colours. Far apart in every channel, so the coverage reads clean.
+    static let keyA = NSColor(srgbRed: 1, green: 0, blue: 1, alpha: 1)
+    static let keyB = NSColor(srgbRed: 0, green: 1, blue: 0, alpha: 1)
+
+    /// `view`'s tree as `cacheDisplay` draws it, with each layer shadow on the side the screen shows it.
+    /// `cacheDisplay` ignores a flipped geometry when it offsets a layer's shadow, so a SwiftUI shadow
+    /// (a `CALayer` shadow in the hosting view's top-down space) lands on the wrong side: the canvas
+    /// toolbar's `y: 6` shadow came out above the bar. The offsets are mirrored for the render only.
+    static func render(_ view: NSView) -> NSBitmapImageRep? {
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+        let mirrored = view.layer.map { flippedShadowLayers(in: $0) } ?? []
+        func mirror() {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            mirrored.forEach { $0.shadowOffset.height = -$0.shadowOffset.height }
+            CATransaction.commit()
+        }
+        // Keep this synchronous: no `await` between the two `mirror()` calls, or the screen could
+        // draw a frame with the shadows mirrored.
+        mirror()
+        defer { mirror() }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return rep
+    }
+
+    /// The layers under `layer` that cast a shadow inside a flipped geometry.
+    static func flippedShadowLayers(in layer: CALayer, flipped: Bool = false) -> [CALayer] {
+        let own = flipped && layer.shadowOpacity > 0 && layer.shadowOffset.height != 0 ? [layer] : []
+        let inner = flipped != layer.isGeometryFlipped
+        return own + (layer.sublayers ?? []).flatMap { flippedShadowLayers(in: $0, flipped: inner) }
+    }
+
+    /// Two renders of `view` with each web view covered by `keyA`, then `keyB`. Nil when there is no web view.
+    static func keyedRenders(of view: NSView, covering webs: [WKWebView]) -> (a: NSBitmapImageRep, b: NSBitmapImageRep)? {
+        guard !webs.isEmpty else { return nil }
+        func render(_ color: NSColor) -> NSBitmapImageRep? {
+            let covers = webs.map { web -> NSView in
+                let cover = NSView(frame: web.bounds)
+                cover.wantsLayer = true
+                cover.layer?.backgroundColor = color.cgColor
+                cover.autoresizingMask = [.width, .height]
+                web.addSubview(cover)
+                return cover
+            }
+            defer { covers.forEach { $0.removeFromSuperview() } }
+            return Self.render(view)
+        }
+        guard let a = render(keyA), let b = render(keyB) else { return nil }
+        return (a, b)
+    }
+
+    static func png(
+        content: NSView, cached: NSBitmapImageRep, pages: [(NSImage, NSRect)],
+        keys: (a: NSBitmapImageRep, b: NSBitmapImageRep)? = nil
+    ) -> Data? {
         let size = content.bounds.size
+        // The output has the cached tree's own pixel format, so the keyed renders read the same way.
+        if let keys, let out = cached.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)),
+           Self.readable(out), Self.readable(keys.a), Self.readable(keys.b), Self.sameShape(out, keys.a), Self.sameShape(out, keys.b),
+           let context = NSGraphicsContext(bitmapImageRep: out) {
+            out.size = size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            for (shot, frame) in pages {
+                shot.draw(in: unflipped(frame, in: content), from: .zero, operation: .copy, fraction: 1)
+            }
+            context.flushGraphics()
+            NSGraphicsContext.restoreGraphicsState()
+            let space = keys.a.colorSpace
+            if let ka = keyA.usingColorSpace(space), let kb = keyB.usingColorSpace(space) {
+                let regions = pages.map { unflipped($0.1, in: content) }
+                putOverlaysBack(in: out, a: keys.a, b: keys.b, keyA: ka, keyB: kb, pages: regions, contentSize: size, flipped: content.isFlipped)
+                return out.representation(using: .png, properties: [:])
+            }
+        }
+        if let keys {
+            FileHandle.standardError.write(Data((
+                "evidence-shot: keyed renders unused, overlays other than pins are lost " +
+                "(cached \(Self.layout(cached)), a \(Self.layout(keys.a)), b \(Self.layout(keys.b)))\n"
+            ).utf8))
+        }
+        // No keyed renders: the snapshots go over the whole frame, and only the pins come back (WAG-307).
         let out = NSImage(size: size)
         out.lockFocus()
         let full = NSRect(origin: .zero, size: size)
@@ -95,7 +183,59 @@ enum EvidenceComposite {
         return rep.representation(using: .png, properties: [:])
     }
 
-    /// WAG-307: a web view's snapshot is drawn over the whole of its frame, so SwiftUI pins laid over
+    /// 8-bit samples, colour first, at least RGB: the only layout `putOverlaysBack` reads.
+    private static func readable(_ rep: NSBitmapImageRep) -> Bool {
+        rep.bitsPerSample == 8 && rep.samplesPerPixel >= 3 && !rep.isPlanar && rep.bitmapData != nil
+            && !rep.bitmapFormat.contains(.alphaFirst) && !rep.bitmapFormat.contains(.floatingPointSamples)
+            && !rep.bitmapFormat.contains(.thirtyTwoBitLittleEndian) && !rep.bitmapFormat.contains(.sixteenBitLittleEndian)
+    }
+
+    private static func layout(_ rep: NSBitmapImageRep) -> String {
+        "\(rep.pixelsWide)x\(rep.pixelsHigh) \(rep.bitsPerSample)b/\(rep.samplesPerPixel)s format \(rep.bitmapFormat.rawValue)"
+    }
+
+    private static func sameShape(_ x: NSBitmapImageRep, _ y: NSBitmapImageRep) -> Bool {
+        x.pixelsWide == y.pixelsWide && x.pixelsHigh == y.pixelsHigh && x.bitsPerPixel == y.bitsPerPixel
+    }
+
+    /// In each page's frame: `t`, how much of the page shows, is the keyed renders' difference over the keys'
+    /// difference. The overlay's own (premultiplied) colour is the `keyA` render less `t` of `keyA`, and the page
+    /// snapshot already in `out` adds its `t`.
+    private static func putOverlaysBack(
+        in out: NSBitmapImageRep, a: NSBitmapImageRep, b: NSBitmapImageRep, keyA: NSColor, keyB: NSColor,
+        pages: [NSRect], contentSize: NSSize, flipped: Bool
+    ) {
+        guard let dst = out.bitmapData, let pa = a.bitmapData, let pb = b.bitmapData else { return }
+        let ka = [keyA.redComponent, keyA.greenComponent, keyA.blueComponent].map { Double($0) * 255 }
+        let kb = [keyB.redComponent, keyB.greenComponent, keyB.blueComponent].map { Double($0) * 255 }
+        let kd = (0..<3).map { ka[$0] - kb[$0] }
+        let kdd = kd.reduce(0) { $0 + $1 * $1 }
+        guard kdd > 1 else { return }
+        let sx = Double(out.pixelsWide) / contentSize.width, sy = Double(out.pixelsHigh) / contentSize.height
+        let step = out.bitsPerPixel / 8
+        for frame in pages {
+            // Bitmap rows run top-down; `frame` is bottom-up.
+            let top = contentSize.height - frame.maxY
+            let x0 = max(0, Int(frame.minX * sx)), x1 = min(out.pixelsWide, Int((frame.maxX * sx).rounded(.up)))
+            let y0 = max(0, Int(top * sy)), y1 = min(out.pixelsHigh, Int(((top + frame.height) * sy).rounded(.up)))
+            guard x1 > x0, y1 > y0 else { continue }
+            for y in y0..<y1 {
+                for x in x0..<x1 {
+                    let o = y * out.bytesPerRow + x * step
+                    var dot = 0.0
+                    for c in 0..<3 { dot += (Double(pa[o + c]) - Double(pb[o + c])) * kd[c] }
+                    let t = min(1, max(0, dot / kdd))
+                    if t > 0.98 { continue }
+                    for c in 0..<3 {
+                        let overlay = Double(pa[o + c]) - t * ka[c]
+                        dst[o + c] = UInt8(min(255, max(0, (overlay + t * Double(dst[o + c])).rounded())))
+                    }
+                }
+            }
+        }
+    }
+
+    /// WAG-307, the fallback with no keyed renders: a snapshot drawn over the whole of its frame hides the SwiftUI pins laid over
     /// the page vanish. The cached tree has the pins on a flat stand-in for the page. A pin is a small
     /// cluster of accent red pixels: each one is found, and its round footprint (number included) goes
     /// back on top of the snapshot.

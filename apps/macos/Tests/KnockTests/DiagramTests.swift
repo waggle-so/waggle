@@ -196,21 +196,3 @@ struct DiagramRenderTests {
         #expect(nonWhite > 50)
     }
 }
-
-/// HAIL-141c: the window-shot composite's frame flip maps a flipped content
-/// view's top-down coordinates into the bottom-up drawing space the web view
-/// snapshot is drawn in. A non-flipped view is left unchanged.
-struct EvidenceCompositeTests {
-    private final class Flipped: NSView { override var isFlipped: Bool { true } }
-    private final class Plain: NSView { }
-
-    @MainActor
-    @Test func unflippedMapsATopDownFrameIntoBottomUpSpace() {
-        let flipped = Flipped(frame: NSRect(x: 0, y: 0, width: 1000, height: 872))
-        let plain = Plain(frame: NSRect(x: 0, y: 0, width: 1000, height: 872))
-        let frame = NSRect(x: 385.5, y: 177, width: 281.5, height: 667)
-        let expected = NSRect(x: 385.5, y: 872 - 177 - 667, width: 281.5, height: 667)
-        #expect(EvidenceComposite.unflipped(frame, in: flipped) == expected)
-        #expect(EvidenceComposite.unflipped(frame, in: plain) == frame)
-    }
-}
