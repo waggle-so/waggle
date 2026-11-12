@@ -141,6 +141,12 @@ final class ComposerAttachments: ObservableObject {
         return true
     }
 
+    /// True when `add(from:)` would take something from this clipboard: a file or an image.
+    static func canAdd(from pasteboard: NSPasteboard) -> Bool {
+        pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+            || pasteboard.canReadObject(forClasses: [NSImage.self], options: nil)
+    }
+
     /// "Pasted image.png", then "Pasted image 2.png".
     private func pastedImageName() -> String {
         var n = 1

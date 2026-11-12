@@ -183,6 +183,16 @@ struct ComposerAttachmentsTests {
         #expect(files.items[0].size == 30)
     }
 
+    @Test func aScreenshotOnTheClipboardCanBePasted() {
+        let board = NSPasteboard(name: NSPasteboard.Name("knock-test-\(UUID().uuidString)"))
+        board.clearContents()
+        board.setData(png(), forType: .png)
+        #expect(ComposerAttachments.canAdd(from: board))
+        board.clearContents()
+        board.setString("just words", forType: .string)
+        #expect(ComposerAttachments.canAdd(from: board) == false)
+    }
+
     @Test func pastedTextIsLeftToTheTextField() {
         let (files, _, _) = model()
         let board = NSPasteboard(name: NSPasteboard.Name("knock-test-\(UUID().uuidString)"))

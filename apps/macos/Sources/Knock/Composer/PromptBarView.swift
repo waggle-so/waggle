@@ -211,6 +211,43 @@ final class PromptNSTextView: NSTextView {
         super.paste(sender)
     }
 
+    /// A plain-text view turns Paste off when the clipboard holds only an image (a screenshot), so Cmd-V
+    /// never reached `paste(_:)`. Where the field takes files, a file or an image keeps Paste on.
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)), pastesFiles(from: .general) { return true }
+        return super.validateUserInterfaceItem(item)
+    }
+
+    /// True when Cmd-V attaches what `pasteboard` holds: this field takes files and it holds a file or an image.
+    func pastesFiles(from pasteboard: NSPasteboard) -> Bool {
+        coordinator?.parent.onPaste != nil && ComposerAttachments.canAdd(from: pasteboard)
+    }
+
+    // MARK: Dropped files (WAG-345)
+
+    /// Where the field takes files, a file dropped on the text attaches like a paste; the text view
+    /// itself would type the file's path.
+    private func attachesDrop(_ sender: NSDraggingInfo) -> Bool { attachesDrop(of: sender.draggingPasteboard) }
+
+    /// True when this field attaches what is dropped from `pasteboard`: it takes files and the drag holds a file.
+    func attachesDrop(of pasteboard: NSPasteboard) -> Bool {
+        coordinator?.parent.onPaste != nil
+            && pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        attachesDrop(sender) ? .copy : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        attachesDrop(sender) ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if attachesDrop(sender), let onPaste = coordinator?.parent.onPaste { return onPaste(sender.draggingPasteboard) }
+        return super.performDragOperation(sender)
+    }
+
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         if ok { coordinator?.focusChanged(true) }
@@ -225,6 +262,7 @@ final class PromptNSTextView: NSTextView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        runEvidencePaste()
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.coordinator?.syncFocus(self)
