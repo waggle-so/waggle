@@ -22,19 +22,37 @@ import Testing
     }
 
     @Test func letterCaseAndSeparatorsAgree() {
-        #expect(badges(["A · x", "a · y", "A: z"]) == ["A1", "A2", "A3"])
+        #expect(badges(["A · x", "a · y", "A: z", "B · w"]) == ["A1", "A2", "A3", "B"])
     }
 
     @Test func letterNumberCaptionIsVariantA() {
-        #expect(badges(["A1 · x", "A2 · y"]) == ["A1", "A2"])
+        #expect(badges(["A1 · x", "A2 · y", "B1 · z"]) == ["A1", "A2", "B"])
         #expect(ScreenRowLabels.variantLetter("A1 · x") == "A")
     }
 
     @Test func sharedComesFromItems() {
-        let withItems = ScreenRowLabels.labels(captions: ["A · x", "Legenda"], items: ["d1", nil])
-        #expect(withItems.map(\.isShared) == [false, true])
-        let noItems = ScreenRowLabels.labels(captions: ["A · x", "Legenda"], items: nil)
-        #expect(noItems.map(\.isShared) == [false, false])
+        let withItems = ScreenRowLabels.labels(captions: ["A · x", "B · y", "Legenda"], items: ["d1", "d1", nil])
+        #expect(withItems.map(\.isShared) == [false, false, true])
+        let noItems = ScreenRowLabels.labels(captions: ["A · x", "B · y", "Legenda"], items: nil)
+        #expect(noItems.map(\.isShared) == [false, false, false])
+    }
+
+    @Test func anArticleIsNotAVariant() {
+        #expect(ScreenRowLabels.variantLetter("A new ring") == nil)
+        #expect(ScreenRowLabels.variantLetter("E-mail di conferma") == nil)
+        #expect(ScreenRowLabels.variantLetter("X-ray view") == nil)
+        #expect(ScreenRowLabels.variantLetter("A Riga") == "A")
+        #expect(ScreenRowLabels.variantLetter("a: riga") == "A")
+    }
+
+    @Test func oneLetterAloneIsNoSet() {
+        #expect(badges(["A · Ring", "Legend"]) == [nil, nil])
+        #expect(badges(["A · x", "A · y"]) == [nil, nil])
+    }
+
+    @Test func theWholeSetDecidesTheLetters() {
+        let labels = ScreenRowLabels.labels(captions: ["A · x", "A · y"], items: nil, setCaptions: ["A · x", "A · y", "B · z"])
+        #expect(labels.map(\.badge) == ["A1", "A2"])
     }
 
     @Test func wordIsNotAVariant() {
@@ -80,6 +98,21 @@ import Testing
 
     @Test func letterPastTheOptionsMarksNothing() {
         #expect(ScreenRowLabels.onScreenOption(letter: "F", anchors: [nil, nil, nil], captions: setCaptions) == nil)
+    }
+
+    @Test func onlyTheDecisionOfTheScreenIsMarked() {
+        let variant = OnScreenVariant(letter: "C", captions: setCaptions, item: "layout")
+        #expect(variant.option(anchors: [nil, nil, nil], item: "layout") == 2)
+        #expect(variant.option(anchors: [nil, nil, nil], item: "colour") == nil)
+        #expect(variant.option(anchors: [nil, nil, nil], item: nil) == nil)
+        let noItems = OnScreenVariant(letter: "C", captions: setCaptions)
+        #expect(noItems.option(anchors: [nil, nil, nil], item: nil) == 2)
+    }
+
+    @Test func screenReadersGetTheTitle() {
+        #expect(ScreenRow.accessibilityLabel(badge: "A2", position: 1, title: "Conferma") == "Screen A2, Conferma")
+        #expect(ScreenRow.accessibilityLabel(badge: nil, position: 3, title: "Screen 4") == "Screen 4")
+        #expect(ScreenRow.accessibilityLabel(badge: "B", position: 2, title: nil) == "Screen B")
     }
 
     @Test func noLetterMarksNothing() {

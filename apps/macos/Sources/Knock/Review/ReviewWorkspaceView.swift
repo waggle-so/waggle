@@ -190,7 +190,7 @@ struct ReviewWorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Colors.win)
         .overlay(alignment: .bottom) { CommentUndoLineView(store: viewModel.commentsStore) }
-        .modifier(OnScreenVariantProvider(store: viewModel.commentsStore))
+        .modifier(OnScreenVariantProvider(store: viewModel.commentsStore, isShowingSet: viewModel.isShowingScreenshots))
         .onAppear {
             unsentWorkRegistry?.registerUnsentWorkProbe(id: probeId) { [weak sendFlow, weak viewModel] in
                 (sendFlow?.hasUnsentWork ?? false) || (viewModel?.editSession?.hasChanges ?? false)

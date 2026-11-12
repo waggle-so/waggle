@@ -34,6 +34,8 @@ struct ScreenRow: View {
                 .onChange(of: current) { _, id in
                     if let id { ReducedMotion.animate(reduceMotion: reduceMotion) { proxy.scrollTo(id) } }
                 }
+                // A row that opens on a later screen starts scrolled to it.
+                .onAppear { if let current { proxy.scrollTo(current) } }
             }
             counter(index: index, total: screens.count)
         }
@@ -92,8 +94,17 @@ struct ScreenRow: View {
         }
         .buttonStyle(.plain).pointerCursor()
         .help(store.screenTitle(for: screen))
-        .accessibilityLabel(label.badge.map { "Screen \($0)" } ?? "Screen \(position + 1)")
+        .accessibilityLabel(Self.accessibilityLabel(
+            badge: label.badge, position: position,
+            title: label.badge == nil ? store.screenTitle(for: screen) : ScreenRowLabels.title(caption: store.captionsByCaptureId[screen.id])))
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    /// VoiceOver reads the badge and the title: "Screen A2, Conferma".
+    static func accessibilityLabel(badge: String?, position: Int, title: String?) -> String {
+        let name = "Screen \(badge ?? String(position + 1))"
+        guard let title, !title.isEmpty, title != name else { return name }
+        return "\(name), \(title)"
     }
 
     private func badgeView(_ text: String, isCurrent: Bool) -> some View {

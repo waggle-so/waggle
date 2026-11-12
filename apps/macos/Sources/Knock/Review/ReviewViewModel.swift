@@ -108,6 +108,12 @@ final class ReviewViewModel: ObservableObject {
         // WAG-280: only a live web stage has page elements for a pin to point at.
         didSet { commentsStore.showsPageElements = artifactState.webRevision != nil }
     }
+
+    /// The stage shows a screenshots set (not an HTML or markdown tab): the option rows may mark «On screen».
+    var isShowingScreenshots: Bool {
+        if case .screenshots = artifactState { return true }
+        return false
+    }
     /// WAG-347: where the page was in the case box when the operator pressed Comment there. Set before `load`;
     /// the live stage uses it once, to start in Comment mode on that page.
     var commentHandoff: CommentHandoff?

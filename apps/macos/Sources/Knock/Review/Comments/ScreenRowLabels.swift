@@ -14,8 +14,11 @@ struct ScreenRowLabel: Equatable {
 enum ScreenRowLabels {
     private static let separators: Set<Character> = [" ", "·", ".", ":", ")", "-"]
 
-    static func labels(captions: [String?], items: [String?]?) -> [ScreenRowLabel] {
-        let letters = captions.map(variantLetter)
+    /// `setCaptions` are the captions of the whole set (default: `captions`). Letters count only when the set
+    /// carries at least two different ones: one lettered caption is more likely a plain title.
+    static func labels(captions: [String?], items: [String?]?, setCaptions: [String?]? = nil) -> [ScreenRowLabel] {
+        let lettered = usesVariants(setCaptions ?? captions)
+        let letters = captions.map { lettered ? variantLetter($0) : nil }
         var totals: [Character: Int] = [:]
         for letter in letters.compactMap({ $0 }) { totals[letter, default: 0] += 1 }
         let usesItems = items?.contains { $0 != nil } ?? false
@@ -30,14 +33,24 @@ enum ScreenRowLabels {
     }
 
     /// The variant letter a caption starts with, uppercased: an ASCII letter followed by the end, a
-    /// separator, or digits and then the end or a separator. Nil for a word ("Avviso") or no caption.
+    /// separator, or digits and then the end or a separator. Nil for a word ("Avviso"), an article or a
+    /// hyphenated word ("A new ring", "E-mail": only spaces or a hyphen, then a lowercase letter), or no caption.
     static func variantLetter(_ caption: String?) -> Character? {
         guard let text = caption?.trimmingCharacters(in: .whitespaces),
               let first = text.first, first.isASCII, first.isLetter else { return nil }
         var rest = text.dropFirst()
         while let c = rest.first, c.isASCII, c.isNumber { rest = rest.dropFirst() }
         guard rest.first.map(separators.contains) ?? true else { return nil }
+        let run = rest.prefix { separators.contains($0) }
+        if run == " " || run == "-", let next = rest.dropFirst(run.count).first, next.isLowercase {
+            return nil
+        }
         return Character(first.uppercased())
+    }
+
+    /// Whether a set's captions name variants: at least two different letters.
+    static func usesVariants(_ captions: [String?]) -> Bool {
+        Set(captions.compactMap(variantLetter)).count >= 2
     }
 
     /// The caption without its variant letter ("C · Riepilogo" → "Riepilogo"); nil when nothing is left.
@@ -70,10 +83,14 @@ struct OnScreenVariant: Equatable {
     let letter: Character
     /// The captions of the whole set, which anchors number.
     let captions: [String?]
+    /// The decision item the screen belongs to (`item` of the set); nil when the set does not use `item`.
+    var item: String? = nil
 
-    /// The 0-based option of this variant, from the options' anchors in order.
-    func option(anchors: [String?]) -> Int? {
-        ScreenRowLabels.onScreenOption(letter: letter, anchors: anchors, captions: captions)
+    /// The 0-based option of this variant, from the options' anchors in order. When the screen belongs to a
+    /// decision item, only that decision (`item`) gets one.
+    func option(anchors: [String?], item decision: String?) -> Int? {
+        if let item, item != decision { return nil }
+        return ScreenRowLabels.onScreenOption(letter: letter, anchors: anchors, captions: captions)
     }
 }
 
@@ -84,16 +101,19 @@ extension EnvironmentValues {
 extension CommentsSessionStore {
     /// The variant on show while a screenshots set with lettered captions is on screen; nil otherwise.
     var onScreenVariant: OnScreenVariant? {
-        guard isScreenshotsCase, let letter = currentLabel?.variant else { return nil }
-        return OnScreenVariant(letter: letter, captions: screens.map { captionsByCaptureId[$0.id] })
+        guard isScreenshotsCase, let capture = currentCapture, let letter = currentLabel?.variant else { return nil }
+        return OnScreenVariant(
+            letter: letter, captions: screens.map { captionsByCaptureId[$0.id] }, item: itemsByCaptureId[capture.id])
     }
 }
 
-/// Puts the variant on show into the environment, and keeps it current as the person flips screens.
+/// Puts the variant on show into the environment, and keeps it current as the person flips screens. `isShowingSet`
+/// is false while another tab (HTML, markdown) or the set view is on show: then no option is «On screen».
 struct OnScreenVariantProvider: ViewModifier {
     @ObservedObject var store: CommentsSessionStore
+    var isShowingSet: Bool
 
     func body(content: Content) -> some View {
-        content.environment(\.onScreenVariant, store.onScreenVariant)
+        content.environment(\.onScreenVariant, isShowingSet ? store.onScreenVariant : nil)
     }
 }
