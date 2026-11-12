@@ -25,7 +25,7 @@ Two parts:
      Other captions show on hover.
    - The counter ‹ 5 / 7 › sits at the end of the row.
    - In the decision panel, the option of the screen on show gets «On screen». The pick does not change.
-     A click on an option's letter goes to its first screen.
+     The options have no letters in the app (number keys 1, 2, 3); a pick already shows its screen (WAG-381), so no new click target.
 
 ## Why
 - "tutte le varianti dovrebbero essere raggruppate meglio qui ed essere sempre visibili" (the bug report).
