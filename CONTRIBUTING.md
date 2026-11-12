@@ -61,12 +61,33 @@ The product is Waggle. Hidden ids keep the old name Knock on purpose, so updates
 Some code comments cite `docs/stories/...`, `MVP.md` or `docs/design/mvp-values.md`. Those are internal planning
 notes from before the code was public, and they are not in this repository. The comment itself says what matters.
 
+## Sign your commits
+
+`main` accepts only signed commits, so GitHub refuses to merge a pull request with an unsigned commit. CI
+checks this on each pull request. Set up signing once, with the SSH key you already use for GitHub:
+
+```bash
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+```
+
+Then add the same public key on GitHub as a **Signing key** (Settings > SSH and GPG keys > New SSH key). A
+GPG key works too: see [GitHub's guide](https://docs.github.com/en/authentication/managing-commit-signature-verification).
+
+To sign commits you already pushed, sign them again and force-push the branch:
+
+```bash
+git rebase --exec 'git commit --amend --no-edit -S' origin/main
+git push --force-with-lease
+```
+
 ## Pull requests
 
 - One change per pull request, with tests.
 - Say what changed and how you checked it. For a UI change, add a window screenshot.
-- Small commits with clear messages.
-- CI runs the daemon and app tests and a secret scan on each pull request.
+- Small, signed commits with clear messages (see [Sign your commits](#sign-your-commits)).
+- CI runs the daemon and app tests, a secret scan and a commit signature check on each pull request.
 
 ## Forks
 

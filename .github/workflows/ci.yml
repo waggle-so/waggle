@@ -85,3 +85,30 @@ jobs:
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_linux_x64.tar.gz | tar xz gitleaks
           ./gitleaks git --redact --verbose --exit-code 1 .
+
+  signatures:
+    # main accepts only signed commits. This fails on the first push of a pull request, not at merge time.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: every commit is signed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          unsigned=$(gh api "repos/$REPO/pulls/$PR/commits" --paginate \
+            --jq '.[] | select(.commit.verification.verified | not) | "\(.sha[0:8]) \(.commit.message | split("\n")[0])"')
+          if [ -n "$unsigned" ]; then
+            echo "These commits have no verified signature:"
+            echo "$unsigned"
+            echo
+            echo "main accepts only signed commits. Set up signing (CONTRIBUTING.md, Sign your commits), then run:"
+            echo "  git rebase --exec 'git commit --amend --no-edit -S' origin/main"
+            echo "  git push --force-with-lease"
+            exit 1
+          fi
+          echo "Every commit is signed."
