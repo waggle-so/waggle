@@ -348,8 +348,9 @@ to. While that decision is on screen, Waggle shows only its images, counted insi
       { path: "./shots/legend.png", caption: "Legend" },
     ]
 
-With no `item`, Waggle reads a caption that starts with a letter or number ("b · Badge", "2. Badge",
-"b1 Badge") as the decision (a or 1 is the first decision, b or 2 the second). Prefer `item`.
+With no `item`, Waggle reads a caption that starts with a number ("2. Badge") or a letter and a
+number ("b1 Badge") as the decision (1 or a1 is the first decision, 2 or b1 the second). A caption
+that starts with a lone letter ("B · Badge") names a variant, not a decision. Prefer `item`.
 
 ## Variants of an html_bundle in a multi-question ask
 

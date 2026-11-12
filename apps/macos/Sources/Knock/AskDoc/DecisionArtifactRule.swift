@@ -111,8 +111,9 @@ enum DecisionArtifactRule {
     /// The images of the decision on screen in a `screenshots` set: the 0-based indexes, in order, or `nil` when
     /// the set does not say (today's WAG-352 rule then applies unchanged). Pure.
     /// - An image has an `item` (the id of a decision): when any image of the set has one, only `item` counts.
-    /// - Else a caption starts with a decision: a letter (`a`, `b`) or a number (`1`, `2`), then a space, `·`, `.`,
-    ///   `:`, `)` or `-`; or a letter and a number (`b1`). Letter `a` and number 1 are the first decision. The
+    /// - Else a caption starts with a decision: a number (`1`, `2`), then a space, `·`, `.`, `:`, `)` or `-`; or a
+    ///   letter and a number (`b1`). Letter `a` and number 1 are the first decision. A lone letter (`B · Tap`) is a
+    ///   variant's name, not a decision. The
     ///   captions count only when they name at least two different decisions, all inside the request, so a lone
     ///   caption like "A new ring" is not read as a decision.
     /// An image that names no decision shows with every decision. A request with one decision has no group.
@@ -141,8 +142,8 @@ enum DecisionArtifactRule {
         func ends(at i: Int) -> Bool { i >= chars.count || separators.contains(chars[i]) }
         if isLetter(chars[0]) {
             let letter = Int(chars[0].lowercased().unicodeScalars.first!.value) - 97
-            // A letter, then a separator: "b · Tap".
-            if chars.count > 1, separators.contains(chars[1]) { return letter }
+            // A lone letter ("B · Tap") names a variant, not a decision: agents letter the variants of one
+            // decision A, B, C, so reading the letter as a decision split them across decisions.
             // A letter and a number: "b1", "b2 Tap".
             var end = 1
             while end < chars.count, isDigit(chars[end]) { end += 1 }

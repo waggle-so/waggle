@@ -38,13 +38,6 @@ struct ScreenshotsPerDecisionTests {
     // MARK: The caption prefix
 
     @Test(arguments: [
-        ["a Tap", "b Tap", "c Tap"],
-        ["a · Tap", "b · Tap", "c · Tap"],
-        ["a. Tap", "b. Tap", "c. Tap"],
-        ["a: Tap", "b: Tap", "c: Tap"],
-        ["a) Tap", "b) Tap", "c) Tap"],
-        ["a - Tap", "b - Tap", "c - Tap"],
-        ["A Tap", "B Tap", "C Tap"],
         ["1 Tap", "2 Tap", "3 Tap"],
         ["1. Tap", "2. Tap", "3. Tap"],
         ["1: Tap", "2: Tap", "3: Tap"],
@@ -60,8 +53,19 @@ struct ScreenshotsPerDecisionTests {
     }
 
     @Test func severalImagesOfOneDecisionShareAPrefix() {
-        let captions: [String?] = ["a · idle", "b1 · idle", "b2 · tapped", "c · done"]
+        let captions: [String?] = ["a1 · idle", "b1 · idle", "b2 · tapped", "c1 · done"]
         #expect(group(1, captions: captions) == [1, 2])
+    }
+
+    /// The variants A, B, C of the first decision stay together: a lone letter is a variant, not a decision.
+    @Test(arguments: [
+        ["A · Banner in the page", "B · Row in the check panel", "C · Sync summary", "Legend"],
+        ["a Tap", "b Tap", "c Tap"],
+        ["A. Tap", "B) Tap", "C - Tap"],
+    ])
+    func loneLetterVariantsAreNotSplitAcrossDecisions(captions: [String]) {
+        #expect(DecisionArtifactRule.captionDecision(captions[0]) == nil)
+        for index in 0..<4 { #expect(group(index, count: 4, captions: captions) == nil) }
     }
 
     @Test func aCaptionWithNoPrefixIsNotADecisionAndLoneProseIsIgnored() {
@@ -84,7 +88,7 @@ struct ScreenshotsPerDecisionTests {
         let items: [String?] = ["ring", nil, "badge"]
         #expect(group(0, ids: ["ring"], captions: [nil, nil, nil], items: items) == [0, 1])
         #expect(group(1, ids: ["badge"], captions: [nil, nil, nil], items: items) == [1, 2])
-        let captions: [String?] = ["a · x", "Legend", "b · y"]
+        let captions: [String?] = ["1 · x", "Legend", "2 · y"]
         #expect(group(1, captions: captions) == [1, 2])
     }
 
