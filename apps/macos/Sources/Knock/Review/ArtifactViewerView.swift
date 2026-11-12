@@ -118,6 +118,12 @@ struct ArtifactViewerView: View {
     private var olderRevision: OlderRevisionDisplay? { viewModel.olderRevisionDisplay }
 
     var body: some View {
+        bodyStack
+            // The set view shows every screen at once: no screen is the one on show for «On screen».
+            .preference(key: ShowsScreenSetViewKey.self, value: isSetView)
+    }
+
+    private var bodyStack: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let olderRevision {
                 olderRevisionTabs(olderRevision).zIndex(1)
@@ -581,7 +587,9 @@ struct ArtifactViewerView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             if isScreenshots, !isSetView {
+                // The title keeps room for a few words; the controls on the right give way first.
                 ScreenTitleLabel(store: viewModel.commentsStore)
+                    .frame(minWidth: ScreenTitleLabel.fullSizeMinWidth, alignment: .leading)
             }
             if let mark = newMarkRevision, mark == artifactState.revision {
                 Text("new")

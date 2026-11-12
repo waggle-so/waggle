@@ -98,6 +98,12 @@ extension EnvironmentValues {
     @Entry var onScreenVariant: OnScreenVariant? = nil
 }
 
+/// Full size reports whether its set view (every screen at once) is on show.
+struct ShowsScreenSetViewKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
 extension CommentsSessionStore {
     /// The variant on show while a screenshots set with lettered captions is on screen; nil otherwise.
     var onScreenVariant: OnScreenVariant? {

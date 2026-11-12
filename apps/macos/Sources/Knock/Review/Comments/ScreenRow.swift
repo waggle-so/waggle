@@ -148,6 +148,9 @@ struct ScreenRow: View {
 struct ScreenTitleLabel: View {
     @ObservedObject var store: CommentsSessionStore
 
+    /// Full size: room for the badge and a few words of the caption ("C2 Riepilogo dopo la…").
+    static let fullSizeMinWidth: CGFloat = 200
+
     var body: some View {
         if store.isScreenshotsCase, let capture = store.currentCapture {
             let label = store.currentLabel
