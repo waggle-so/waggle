@@ -149,7 +149,8 @@ final class CommentsSessionStore: ObservableObject {
         return ScreenRowLabels.labels(
             captions: gallery.map { captionsByCaptureId[$0.id] },
             items: gallery.map { itemsByCaptureId[$0.id] },
-            setCaptions: screens.map { captionsByCaptureId[$0.id] })
+            setCaptions: screens.map { captionsByCaptureId[$0.id] },
+            setItems: screens.map { itemsByCaptureId[$0.id] })
     }
 
     /// The label of the screen on show, when it is in the gallery.

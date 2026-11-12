@@ -336,6 +336,21 @@ enum Theme {
             font: .custom(FontFamily.sans, size: 9.5).weight(.bold),
             size: 9.5, lineHeight: nil, letterSpacing: nil
         )
+        /// The variant badge inside a screen row thumbnail, "A2" (decision record 2026-11-12): Inter 9/700.
+        static let screenBadge9w700 = TextStyle(
+            font: .custom(FontFamily.sans, size: 9).weight(.bold),
+            size: 9, lineHeight: nil, letterSpacing: nil
+        )
+        /// The title of the screen on show in the box and full-size header, "C2 Riepilogo…": Inter 12/400.
+        static let screenTitle12w400 = TextStyle(
+            font: .custom(FontFamily.sans, size: 12),
+            size: 12, lineHeight: nil, letterSpacing: nil
+        )
+        /// «On screen» on an option row: Inter 10/600.
+        static let onScreenChip10w600 = TextStyle(
+            font: .custom(FontFamily.sans, size: 10).weight(.semibold),
+            size: 10, lineHeight: nil, letterSpacing: nil
+        )
         /// Comments-column composer key hint, "⌘↵" (`uyrRs` → `dpDYQ` →
         /// `SubDU` → `aUwYI`): Inter 11.5/400. Distinct from `keyHint12_5w400`
         /// (M4's composer uses 12.5pt for the same hint; M5's node is 11.5pt).

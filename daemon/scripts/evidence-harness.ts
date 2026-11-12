@@ -580,13 +580,13 @@ async function shotSet(): Promise<void> {
 // Decision record 2026-11-12: one decision whose variants have several screens (A1 A2 B C1 C2 C3), plus a
 // shared legend, for the compact screen row.
 const VARIANT_SET_ITEMS: { name: string; caption: string; rgb: [number, number, number] }[] = [
-  { name: "a1.png", caption: "A · Riga nel pannello di verifica", rgb: [0xfc, 0xee, 0xc4] },
-  { name: "a2.png", caption: "A · Dopo il clic: conferma della chiusura", rgb: [0xf9, 0xe2, 0xa8] },
-  { name: "b.png", caption: "B · Avviso in cima alla procedura", rgb: [0xe7, 0xf5, 0xec] },
-  { name: "c1.png", caption: "C · Elenco delle procedure", rgb: [0xe7, 0xec, 0xfd] },
-  { name: "c2.png", caption: "C · Riepilogo dopo la sync, con l'avviso in cima", rgb: [0xd8, 0xe0, 0xfb] },
-  { name: "c3.png", caption: "C · Dettaglio della procedura", rgb: [0xc9, 0xd4, 0xf8] },
-  { name: "legend.png", caption: "Legenda dei colori", rgb: [0xf3, 0xf3, 0xf3] },
+  { name: "a1.png", caption: "A · Row in the review panel", rgb: [0xfc, 0xee, 0xc4] },
+  { name: "a2.png", caption: "A · After the click: closing confirmed", rgb: [0xf9, 0xe2, 0xa8] },
+  { name: "b.png", caption: "B · Notice at the top of the procedure", rgb: [0xe7, 0xf5, 0xec] },
+  { name: "c1.png", caption: "C · List of procedures", rgb: [0xe7, 0xec, 0xfd] },
+  { name: "c2.png", caption: "C · Summary after the sync, with the notice on top", rgb: [0xd8, 0xe0, 0xfb] },
+  { name: "c3.png", caption: "C · Procedure detail", rgb: [0xc9, 0xd4, 0xf8] },
+  { name: "legend.png", caption: "Colour legend", rgb: [0xf3, 0xf3, 0xf3] },
 ];
 
 async function variantSet(): Promise<void> {
@@ -611,11 +611,11 @@ async function variantSet(): Promise<void> {
     "case.create",
     {
       ...SCREENSHOTS_FIXTURE,
-      title: "Come segnaliamo una procedura chiusa per errore?",
+      title: "How do we flag a procedure closed by mistake?",
       options: [
-        { id: "a", title: "Riga nel pannello", label: "Una riga nel pannello di verifica." },
-        { id: "b", title: "Avviso in cima", label: "Un avviso in cima alla procedura." },
-        { id: "c", title: "Riepilogo dopo la sync", label: "Un riepilogo dopo la sync." },
+        { id: "a", title: "Row in the panel", label: "A row in the review panel." },
+        { id: "b", title: "Notice on top", label: "A notice at the top of the procedure." },
+        { id: "c", title: "Summary after the sync", label: "A summary after the sync." },
       ],
       recommendation: "a",
       artifact: { type: "screenshots", items: staged.items },

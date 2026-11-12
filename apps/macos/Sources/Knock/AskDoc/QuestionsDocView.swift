@@ -203,7 +203,9 @@ struct ItemRowsView: View {
     private var answers: some View {
         let isMany = point.select == .many
         let rows = doc.optionRows(question: questionId, point: point)
-        let onScreen = onScreenVariant?.option(anchors: point.choices.map(\.anchor), item: point.itemId)
+        let onScreen = onScreenVariant?.option(
+            anchors: point.choices.map(\.anchor), item: point.itemId,
+            decisionCount: doc.questions.reduce(0) { $0 + $1.points.count })
         let open = CalmOption.openPosition(
             selected: rows.first(where: \.isSelected)?.position, recommended: rows.first(where: \.isRecommended)?.position,
             isCheckbox: isMany)

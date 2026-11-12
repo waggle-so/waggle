@@ -14,10 +14,11 @@ struct ScreenRowLabel: Equatable {
 enum ScreenRowLabels {
     private static let separators: Set<Character> = [" ", "·", ".", ":", ")", "-"]
 
-    /// `setCaptions` are the captions of the whole set (default: `captions`). Letters count only when the set
-    /// carries at least two different ones: one lettered caption is more likely a plain title.
-    static func labels(captions: [String?], items: [String?]?, setCaptions: [String?]? = nil) -> [ScreenRowLabel] {
-        let lettered = usesVariants(setCaptions ?? captions)
+    /// `setCaptions` and `setItems` are those of the whole set (default: `captions`, `items`). See `usesVariants`.
+    static func labels(
+        captions: [String?], items: [String?]?, setCaptions: [String?]? = nil, setItems: [String?]? = nil
+    ) -> [ScreenRowLabel] {
+        let lettered = usesVariants(setCaptions ?? captions, items: setItems ?? items)
         let letters = captions.map { lettered ? variantLetter($0) : nil }
         var totals: [Character: Int] = [:]
         for letter in letters.compactMap({ $0 }) { totals[letter, default: 0] += 1 }
@@ -48,9 +49,13 @@ enum ScreenRowLabels {
         return Character(first.uppercased())
     }
 
-    /// Whether a set's captions name variants: at least two different letters.
-    static func usesVariants(_ captions: [String?]) -> Bool {
-        Set(captions.compactMap(variantLetter)).count >= 2
+    /// Whether a set's captions name variants: at least two different letters (one lettered caption is more likely
+    /// a plain title), and, in a set with no `item`, not "b1"-style captions that name two or more decisions
+    /// (`DecisionArtifactRule.captionDecision`): there the letter is the decision.
+    static func usesVariants(_ captions: [String?], items: [String?]? = nil) -> Bool {
+        guard Set(captions.compactMap(variantLetter)).count >= 2 else { return false }
+        if items?.contains(where: { $0 != nil }) == true { return true }
+        return Set(captions.compactMap(DecisionArtifactRule.captionDecision)).count < 2
     }
 
     /// The caption without its variant letter ("C · Riepilogo" → "Riepilogo"); nil when nothing is left.
@@ -87,9 +92,14 @@ struct OnScreenVariant: Equatable {
     var item: String? = nil
 
     /// The 0-based option of this variant, from the options' anchors in order. When the screen belongs to a
-    /// decision item, only that decision (`item`) gets one.
-    func option(anchors: [String?], item decision: String?) -> Int? {
-        if let item, item != decision { return nil }
+    /// decision item, only that decision (`item`) gets one. With no `item` the set cannot say which decision it
+    /// belongs to, so only a request with one decision (`decisionCount`) gets one.
+    func option(anchors: [String?], item decision: String?, decisionCount: Int) -> Int? {
+        if let item {
+            guard item == decision else { return nil }
+        } else if decisionCount > 1 {
+            return nil
+        }
         return ScreenRowLabels.onScreenOption(letter: letter, anchors: anchors, captions: captions)
     }
 }

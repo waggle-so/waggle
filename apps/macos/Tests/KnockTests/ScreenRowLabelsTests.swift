@@ -26,8 +26,34 @@ import Testing
     }
 
     @Test func letterNumberCaptionIsVariantA() {
-        #expect(badges(["A1 · x", "A2 · y", "B1 · z"]) == ["A1", "A2", "B"])
+        #expect(badges(["A1 · x", "A2 · y", "B1 · z"], items: ["d", "d", "d"]) == ["A1", "A2", "B"])
         #expect(ScreenRowLabels.variantLetter("A1 · x") == "A")
+    }
+
+    /// PR #23 review: with no `item`, "b1"-style captions that name two or more decisions are decisions, not variants.
+    @Test func decisionCaptionsAreNotVariants() {
+        let captions: [String?] = ["a1 · idle", "b1 · idle", "b2 · tapped", "c1 · done"]
+        #expect(badges(captions) == [nil, nil, nil, nil])
+        #expect(badges(["b1 · idle", "b2 · tapped"], items: nil) == [nil, nil])
+        let labels = ScreenRowLabels.labels(captions: ["b1 · idle", "b2 · tapped"], items: nil, setCaptions: captions)
+        #expect(labels.map(\.variant) == [nil, nil])
+    }
+
+    @MainActor @Test func decisionCaptionsMarkNoOption() {
+        let store = CommentsSessionStore()
+        let captions: [String?] = ["a1 · idle", "b1 · idle", "b2 · tapped", "c1 · done"]
+        let images = captions.map { (image: NSImage(size: NSSize(width: 10, height: 10)), caption: $0) }
+        let records = store.addScreenshotsCaptures(images: images, revision: 1)
+        store.showDecisionGroup([1, 2])
+        store.selectCapture(id: records[1].id)
+        #expect(store.galleryLabels.map(\.badge) == [nil, nil])
+        #expect(store.onScreenVariant == nil)
+    }
+
+    @Test func noItemMarksOnlyALoneDecision() {
+        let variant = OnScreenVariant(letter: "B", captions: setCaptions)
+        #expect(variant.option(anchors: [nil, nil, nil], item: nil, decisionCount: 1) == 1)
+        #expect(variant.option(anchors: [nil, nil, nil], item: nil, decisionCount: 3) == nil)
     }
 
     @Test func sharedComesFromItems() {
@@ -102,11 +128,11 @@ import Testing
 
     @Test func onlyTheDecisionOfTheScreenIsMarked() {
         let variant = OnScreenVariant(letter: "C", captions: setCaptions, item: "layout")
-        #expect(variant.option(anchors: [nil, nil, nil], item: "layout") == 2)
-        #expect(variant.option(anchors: [nil, nil, nil], item: "colour") == nil)
-        #expect(variant.option(anchors: [nil, nil, nil], item: nil) == nil)
+        #expect(variant.option(anchors: [nil, nil, nil], item: "layout", decisionCount: 2) == 2)
+        #expect(variant.option(anchors: [nil, nil, nil], item: "colour", decisionCount: 2) == nil)
+        #expect(variant.option(anchors: [nil, nil, nil], item: nil, decisionCount: 1) == nil)
         let noItems = OnScreenVariant(letter: "C", captions: setCaptions)
-        #expect(noItems.option(anchors: [nil, nil, nil], item: nil) == 2)
+        #expect(noItems.option(anchors: [nil, nil, nil], item: nil, decisionCount: 1) == 2)
     }
 
     @Test func screenReadersGetTheTitle() {

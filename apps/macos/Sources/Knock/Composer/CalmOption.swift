@@ -898,13 +898,13 @@ struct CompactOptionRow: View {
         HStack(spacing: 4) {
             Circle().fill(Theme.Colors.honey500).frame(width: 6, height: 6)
             Text("On screen")
-                .font(.system(size: 10, weight: .semibold))
+                .knockTextStyle(Theme.Typography.onScreenChip10w600)
                 .foregroundColor(Theme.Colors.ink2)
                 .lineLimit(1)
         }
         .padding(EdgeInsets(top: 2, leading: 5, bottom: 2, trailing: 5))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.Colors.line2, lineWidth: 1))
-        .help("The screen on show is this option's")
+        .help("This option's screen is on show")
         .accessibilityLabel("On screen")
     }
 

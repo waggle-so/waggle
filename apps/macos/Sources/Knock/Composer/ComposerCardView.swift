@@ -269,7 +269,7 @@ struct ComposerCardView: View {
                 )
         }
         // The pick opens in place, else the recommendation (mockup `.choice.on .x`). The older set stays closed.
-        let onScreen = isFirstSet ? nil : onScreenVariant?.option(anchors: list.map(\.anchor), item: nil)
+        let onScreen = isFirstSet ? nil : onScreenVariant?.option(anchors: list.map(\.anchor), item: nil, decisionCount: 1)
         let open = isFirstSet ? nil : CalmOption.openPosition(
             selected: list.firstIndex(where: picked).map { $0 + 1 },
             recommended: list.firstIndex(where: { $0.id == recommendationId }).map { $0 + 1 }, isCheckbox: checks)

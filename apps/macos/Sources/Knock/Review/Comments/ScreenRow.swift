@@ -109,7 +109,7 @@ struct ScreenRow: View {
 
     private func badgeView(_ text: String, isCurrent: Bool) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .bold))
+            .knockTextStyle(Theme.Typography.screenBadge9w700)
             .foregroundColor(isCurrent ? Theme.Colors.win : Theme.Colors.ink)
             .padding(.horizontal, 3)
             .frame(minWidth: 13, minHeight: 13)
@@ -121,7 +121,7 @@ struct ScreenRow: View {
         HStack(spacing: 6) {
             stepButton("chevron.left", label: "Previous screen", enabled: index > 0) { onStep(-1) }
             Text("\(index + 1) / \(total)")
-                .font(.system(size: 11, design: .monospaced))
+                .knockTextStyle(Theme.Typography.monoMeta11w400)
                 .foregroundColor(Theme.AskDoc.Colors.quiet)
                 .monospacedDigit()
                 .fixedSize()
@@ -160,7 +160,7 @@ struct ScreenTitleLabel: View {
                 Rectangle().fill(Theme.Colors.line2).frame(width: 1, height: 14)
                 (Text(label?.badge.map { "\($0) " } ?? "").fontWeight(.bold).foregroundColor(Theme.Colors.ink)
                     + Text(caption ?? "").foregroundColor(Theme.Colors.ink2))
-                    .font(.system(size: 12))
+                    .knockTextStyle(Theme.Typography.screenTitle12w400)
                     .lineLimit(1).truncationMode(.tail)
             }
             .layoutPriority(-1)
