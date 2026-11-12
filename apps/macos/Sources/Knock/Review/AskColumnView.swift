@@ -77,7 +77,7 @@ struct AskColumnView: View {
 
             // An ask with questions: the steps, one question at a time, as in the case pane (WAG-305).
             if let askDoc, askDoc.doc != nil, AskPanelLayout.showsQuestions(knockCase) {
-                AskColumnQuestionsBody(knockCase: knockCase, askDoc: askDoc)
+                AskColumnQuestionsBody(knockCase: knockCase, askDoc: askDoc, sendFlow: sendFlow)
             }
 
             if let instruction = knockCase.roundHeading?.instruction {
