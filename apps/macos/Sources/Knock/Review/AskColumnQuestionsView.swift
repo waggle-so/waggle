@@ -2,10 +2,12 @@ import SwiftUI
 
 /// The questions branch of the workspace's ask column (WAG-305, audit F2): the same step bar, question,
 /// pick box and review step as the case pane, driven by the same `AskDocController` and `QuestionsDocModel`.
-/// The DECIDE rows and the note sit in the dock below (`AskColumnQuestionsDock`).
+/// The step's points scroll with the column under the question, as in the case pane (C1); the dock below
+/// (`AskColumnQuestionsDock`) keeps the note, Back, Next and Send.
 struct AskColumnQuestionsBody: View {
     let knockCase: Case
     @ObservedObject var askDoc: AskDocController
+    let sendFlow: SendFlowController
 
     var body: some View {
         if let doc = askDoc.doc {
@@ -39,6 +41,10 @@ struct AskColumnQuestionsBody: View {
                     question: question, doc: binding, cards: [], selectedCardId: nil,
                     lastTarget: { askDoc.lastTarget(fullSize: $0) }, onOpen: { _, _ in },
                     showsHeader: false, showsPoints: !DecisionDock.optionsInDock(.step), showsPicks: true)
+                // The column only shows an open ask (`AnsweredAskColumnView` takes the answered one), so never locked.
+                StepPointsInColumn(
+                    question: question, doc: binding, sendFlow: sendFlow, composer: sendFlow.composer,
+                    deliveryState: sendFlow.deliveryState, isLocked: false)
             } else {
                 Text("Send your \(doc.questions.count) decisions?")
                     .knockTextStyle(AskHeaderWidth.narrow.titleStyle)
@@ -62,7 +68,8 @@ struct AskColumnQuestionsDock: View {
             AnswersBarView(
                 doc: Binding(get: { askDoc.doc ?? doc }, set: { askDoc.doc = $0 }),
                 sendFlow: sendFlow, deliveryState: sendFlow.deliveryState, isChanging: sendFlow.isEditingLockedAnswer,
-                maxPointsHeight: AskPanelLayout.dockCap(columnHeight: columnHeight))
+                maxPointsHeight: AskPanelLayout.dockCap(columnHeight: columnHeight),
+                pointsInColumn: true)
         }
     }
 }
