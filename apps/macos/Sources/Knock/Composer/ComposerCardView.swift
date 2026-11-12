@@ -104,6 +104,9 @@ struct ComposerCardView: View {
     }
     private var answerBox: AnswerBoxState { isLocked || sendFlow.isEditingLockedAnswer ? .original : composer.answerBox }
 
+    /// The variant of the screen on show (decision record 2026-11-12): its option gets «On screen».
+    @Environment(\.onScreenVariant) private var onScreenVariant
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if deliveryState.state == .idle {
@@ -266,6 +269,7 @@ struct ComposerCardView: View {
                 )
         }
         // The pick opens in place, else the recommendation (mockup `.choice.on .x`). The older set stays closed.
+        let onScreen = isFirstSet ? nil : onScreenVariant?.option(anchors: list.map(\.anchor))
         let open = isFirstSet ? nil : CalmOption.openPosition(
             selected: list.firstIndex(where: picked).map { $0 + 1 },
             recommended: list.firstIndex(where: { $0.id == recommendationId }).map { $0 + 1 }, isCheckbox: checks)
@@ -296,6 +300,7 @@ struct ComposerCardView: View {
                     onLean: !isFirstSet && composer.supportsDiscuss ? { composer.toggleLean(option.id) } : nil,
                     onRuleOut: !isFirstSet && composer.supportsDiscuss ? { composer.toggleRuleOut(option.id) } : nil,
                     isOpen: open == index + 1,
+                    isOnScreen: onScreen == index,
                     onSelect: {
                         // A click opens the row with a short height change. Number keys and Cmd+D call the
                         // composer directly, so they never animate.

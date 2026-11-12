@@ -44,6 +44,8 @@ struct OptionChipView: View {
     var onRuleOut: (() -> Void)? = nil
     /// The card shows its details in place: the pick, else the recommendation (`CalmOption.openPosition`).
     var isOpen = false
+    /// «On screen»: the screen on show in a screenshots set is this option's variant. It never picks.
+    var isOnScreen = false
     let onSelect: () -> Void
 
     /// Rows are the calm card's compact rows everywhere (WAG-303); a pick-many row is the same row with a check box
@@ -76,7 +78,7 @@ struct OptionChipView: View {
                 option: option, position: position, isSelected: isSelected, isRecommended: isRecommended,
                 isLocked: isLocked, recommendationWhy: recommendationWhy,
                 isLeaning: isLeaning, isRuledOut: isRuledOut, onLean: onLean, onRuleOut: onRuleOut,
-                isCheckbox: isCheckbox, isLimitDimmed: isLimitDimmed, isOpen: isOpen, onSelect: onSelect)
+                isCheckbox: isCheckbox, isLimitDimmed: isLimitDimmed, isOpen: isOpen, isOnScreen: isOnScreen, onSelect: onSelect)
             // The older set is the same bar row, dimmed (WAG-336).
             .opacity(isFirstSetRow && !isSelected ? 0.6 : 1)
         } else {

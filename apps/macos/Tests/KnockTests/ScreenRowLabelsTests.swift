@@ -63,4 +63,26 @@ import Testing
         store.selectCapture(id: records[1].id)
         #expect(store.currentLabel?.badge == "A2")
     }
+
+    // MARK: «On screen»
+
+    private let setCaptions: [String?] = ["A · uno", "B · due", "C · tre", "C · quattro"]
+
+    @Test func anchorWins() {
+        // The second option anchors on image 3, a C screen: it is the option of C, though C is the third letter.
+        let position = ScreenRowLabels.onScreenOption(letter: "C", anchors: [nil, "3", nil], captions: setCaptions)
+        #expect(position == 1)
+    }
+
+    @Test func positionWhenNoAnchor() {
+        #expect(ScreenRowLabels.onScreenOption(letter: "C", anchors: [nil, nil, nil], captions: setCaptions) == 2)
+    }
+
+    @Test func letterPastTheOptionsMarksNothing() {
+        #expect(ScreenRowLabels.onScreenOption(letter: "F", anchors: [nil, nil, nil], captions: setCaptions) == nil)
+    }
+
+    @Test func noLetterMarksNothing() {
+        #expect(ScreenRowLabels.onScreenOption(letter: nil, anchors: [nil, nil, nil], captions: setCaptions) == nil)
+    }
 }

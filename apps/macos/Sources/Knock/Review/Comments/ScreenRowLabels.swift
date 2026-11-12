@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// The label of one screen in the screen row: its badge ("A", "A2"), its variant letter, and whether
 /// every decision shares it.
@@ -48,5 +48,52 @@ enum ScreenRowLabels {
             .drop { $0.isASCII && $0.isNumber }
             .drop { separators.contains($0) }
         return rest.isEmpty ? nil : String(rest)
+    }
+
+    /// The 0-based option of the variant on screen: an option whose anchor names an image of `letter` wins, else
+    /// the option at the letter's place (C → third) when there is one. `anchors` has one entry per option; `captions`
+    /// are the captions of the whole set, which anchors number.
+    static func onScreenOption(letter: Character?, anchors: [String?], captions: [String?]) -> Int? {
+        guard let letter else { return nil }
+        if let anchored = anchors.firstIndex(where: { anchor in
+            DecisionArtifactRule.imageIndex(anchor: anchor, captions: captions)
+                .map { variantLetter(captions[$0]) == letter } ?? false
+        }) { return anchored }
+        guard let ascii = letter.asciiValue, let a = Character("A").asciiValue else { return nil }
+        let position = Int(ascii) - Int(a)
+        return anchors.indices.contains(position) ? position : nil
+    }
+}
+
+/// The variant of the screen on show, for the option rows of the decision panel («On screen»).
+struct OnScreenVariant: Equatable {
+    let letter: Character
+    /// The captions of the whole set, which anchors number.
+    let captions: [String?]
+
+    /// The 0-based option of this variant, from the options' anchors in order.
+    func option(anchors: [String?]) -> Int? {
+        ScreenRowLabels.onScreenOption(letter: letter, anchors: anchors, captions: captions)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var onScreenVariant: OnScreenVariant? = nil
+}
+
+extension CommentsSessionStore {
+    /// The variant on show while a screenshots set with lettered captions is on screen; nil otherwise.
+    var onScreenVariant: OnScreenVariant? {
+        guard isScreenshotsCase, let letter = currentLabel?.variant else { return nil }
+        return OnScreenVariant(letter: letter, captions: screens.map { captionsByCaptureId[$0.id] })
+    }
+}
+
+/// Puts the variant on show into the environment, and keeps it current as the person flips screens.
+struct OnScreenVariantProvider: ViewModifier {
+    @ObservedObject var store: CommentsSessionStore
+
+    func body(content: Content) -> some View {
+        content.environment(\.onScreenVariant, store.onScreenVariant)
     }
 }
