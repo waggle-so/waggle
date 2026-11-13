@@ -1405,7 +1405,7 @@ Migration 61 fills the index from old cases. It also adds `cases.matched_case_id
   one text block: `{ "status": "held", "case_created": false, "matches": [...], "next": "..." }`. `next` tells the agent to do one of
   three things: drop the ask, send a better ask that names the old decision, or send the same ask again.
 - **Second send.** The same session sending the same title (trimmed, case folded) within 15 minutes always creates the case. The
-  case stores the matched case ids (`Case.matched_case_ids`, an array, empty when none). A retry of the held call (same
+  case stores the matched case ids (`Case.matched_case_ids`, an array of ids; absent when none). A retry of the held call (same
   `client_request_id`) gets the hold again. A better ask (other title) is held again only for a match the session was not shown in
   the window; otherwise it is created at once and stores the ids. The hold lives in daemon memory: a restart forgets it.
 - **Never held.** A review, an ask with `replaces` or `follows`, an ask a rule decides, an ask with no match, and any ask when the

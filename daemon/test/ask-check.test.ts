@@ -113,7 +113,7 @@ describe("what is never held", () => {
     const { ask } = await boot();
     const res = await ask({ ...cacheAsk, title: "Rename the settings page", need: "A new name." }, "req-nomatch-001");
     expect((res.result as { id: string }).id).toBeString();
-    expect((res.result as { matched_case_ids: string[] }).matched_case_ids).toEqual([]);
+    expect((res.result as { matched_case_ids?: string[] }).matched_case_ids).toBeUndefined();
   });
 
   test("a review is not held", async () => {

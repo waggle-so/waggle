@@ -584,7 +584,7 @@ export class Store {
       updated_at: now,
       ...(ask.stage !== undefined ? { plan: { stage: ask.stage, rounds: 1, answered: 0, ...(lastStaged !== null ? { artifact_kind: lastStaged.kind } : {}) } } : {}),
       ...(auto !== null ? { auto_decided: { ...auto, at: now } } : {}),
-      matched_case_ids: [...matchedCaseIds],
+      ...(matchedCaseIds.length > 0 ? { matched_case_ids: [...matchedCaseIds] } : {}),
       replaced_answer_note: replacedAnswerNote,
       words_warning: wordsWarningText,
     };
@@ -4079,6 +4079,12 @@ function caseSelectColumns(): string {
         (SELECT s.rowid FROM sessions s WHERE s.task_id = c.task_id OR s.id = t.owner_session_id ORDER BY s.connected_at DESC LIMIT 1)`;
 }
 
+// WAG-416: the field is there only when the ask matched past decisions, so a case with none serves the same bytes as before.
+function matchedIdsField(json: string | null | undefined): { matched_case_ids?: string[] } {
+  const ids = JSON.parse(json ?? "[]") as string[];
+  return ids.length > 0 ? { matched_case_ids: ids } : {};
+}
+
 function rowToCase(row: CaseRow): Case {
   return {
     id: row.id,
@@ -4164,7 +4170,7 @@ function rowToCase(row: CaseRow): Case {
     session_ended_at: row.session_ended_at ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    matched_case_ids: JSON.parse(row.matched_case_ids_json ?? "[]") as string[],
+    ...matchedIdsField(row.matched_case_ids_json),
     ...(row.auto_at != null && AskCategory.safeParse(row.auto_category).success
       ? {
           auto_decided: {
