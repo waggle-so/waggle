@@ -41,7 +41,7 @@ final class MatchedCasesLoader: ObservableObject {
     }
 }
 
-/// The quiet line and its list. Nothing shows until at least one matched case is found.
+/// The quiet line and its list, which opens in place under the line. Nothing shows until at least one matched case is found.
 struct PastDecisionsLine: View {
     let ids: [String]
     let client: KnockClient?
@@ -49,6 +49,7 @@ struct PastDecisionsLine: View {
 
     @StateObject private var loader: MatchedCasesLoader
     @State private var isOpen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(ids: [String], client: KnockClient?, onOpenCase: @escaping (String) -> Void) {
         self.ids = ids
@@ -60,7 +61,9 @@ struct PastDecisionsLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !loader.cases.isEmpty {
-                Button { isOpen.toggle() } label: {
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { isOpen.toggle() }
+                } label: {
                     Text(PastDecisions.label(count: loader.cases.count))
                         .knockTextStyle(Theme.Typography.rowLabel12_5w500)
                         .foregroundColor(Theme.Colors.ink3)
@@ -68,8 +71,8 @@ struct PastDecisionsLine: View {
                 }
                 .buttonStyle(.plain).pointerCursor()
                 .accessibilityIdentifier("past-decisions-line")
-                .popover(isPresented: $isOpen, arrowEdge: .bottom) { list }
-                .padding(.bottom, 10)
+                .padding(.bottom, isOpen ? 6 : 10)
+                if isOpen { list.transition(.opacity).padding(.bottom, 10) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,7 +81,7 @@ struct PastDecisionsLine: View {
     }
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(loader.cases) { item in
                 Button {
                     isOpen = false
@@ -96,8 +99,7 @@ struct PastDecisionsLine: View {
                 .help("Open this decision")
             }
         }
-        .padding(14)
-        .frame(width: 320, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Evidence hook (dev only): `KNOCK_EVIDENCE_PAST_DECISIONS_OPEN=1` opens the list on appear.
