@@ -770,6 +770,9 @@ export const Case = z.object({
   sources: z.array(Source).optional(),
   // WAG-412: set when the operator's "Ask less" rule decided this case. Absent otherwise. Additive.
   auto_decided: AutoDecided.optional(),
+  // WAG-416: the ids of the past decisions in this project that fit the ask when it was sent (the check inside
+  // waggle_ask held it once, or it named them). Absent when none. Optional on the wire so an older daemon's case parses.
+  matched_case_ids: z.array(z.string()).optional(),
 });
 export type Case = z.infer<typeof Case>;
 
