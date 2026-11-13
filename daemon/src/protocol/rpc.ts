@@ -1079,6 +1079,7 @@ export const PreferenceScope = z.enum(["project", "all"]);
 export const ProjectTheme = z.object({
   id: z.string(),
   scope: PreferenceScope,
+  project: z.string().nullable(),
   text: z.string(),
   evidence_count: z.number().int().nonnegative(),
   quotes: z.array(z.string()),

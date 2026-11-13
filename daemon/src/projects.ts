@@ -35,6 +35,8 @@ export type PreferenceScope = "project" | "all";
 export interface Theme {
   id: string;
   scope: PreferenceScope;
+  // The project of a project rule; null for scope all.
+  project: string | null;
   text: string;
   evidence_count: number;
   quotes: string[];
@@ -75,6 +77,7 @@ interface OptionRow {
 interface ThemeRow {
   id: string;
   scope: PreferenceScope;
+  project: string | null;
   case_ids_json: string;
   text: string;
   evidence_count: number;
@@ -89,6 +92,7 @@ function toTheme(row: ThemeRow): Theme {
   return {
     id: row.id,
     scope: row.scope,
+    project: row.project,
     text: row.text,
     evidence_count: row.evidence_count,
     quotes: JSON.parse(row.quotes_json) as string[],
