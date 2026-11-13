@@ -24,7 +24,7 @@ test("migration 54 keeps replies and takes the handed_over state", () => {
   expect(() => db.exec(`UPDATE replies SET state = 'handed_over' WHERE id = 'r1'`)).toThrow();
   migrate(db);
   migrate(db);
-  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(60);
+  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(61);
   const row = db.query(`SELECT * FROM replies WHERE id = 'r1'`).get() as Record<string, unknown>;
   expect(row.state).toBe("failed");
   expect(row.reason).toBe("session_unreachable");

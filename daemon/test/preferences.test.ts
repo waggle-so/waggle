@@ -28,7 +28,7 @@ describe("migration 60", () => {
     ins.run("th_2", "waggle", "Dark chrome", 2, "[]", 0, null, "2026-01-03T00:00:00.000Z", "2026-01-03T00:00:00.000Z");
     ins.run("th_3", "other", "Tight rows", 1, '["q"]', 1, "sess-9", "2026-01-04T00:00:00.000Z", "2026-01-04T00:00:00.000Z");
     migrate(db);
-    expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(60);
+    expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBeGreaterThanOrEqual(60);
     const rows = db.query(`SELECT * FROM preferences ORDER BY id`).all() as Record<string, unknown>[];
     expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({

@@ -12,6 +12,7 @@ import type { ConnectorManager } from "./connectors/manager";
 import { RelayError, type RelaySharing } from "./connectors/relay";
 import { SlackError, type SlackConnector } from "./connectors/slack";
 import { TelegramError, type TelegramConnector } from "./connectors/telegram";
+import { AskCheck } from "./ask-check";
 import type { Store } from "./store";
 import {
   ArtifactPathParams,
@@ -240,6 +241,8 @@ export function startRpcServer(opts: {
   const mcpManifestTools = opts.mcpManifestTools ?? MCP_TOOLS;
   const mcpManifestEnabled = opts.mcpManifestEnabled ?? true;
   const mods = opts.mods ?? new ModRegistry();
+  // WAG-416: the holds of the check inside waggle_ask (in memory, 15 minute window).
+  const askCheck = new AskCheck();
 
   // WAG-273: the Stop hook reads the Requests choices from a file in the data root (no daemon needed).
   // Written at start, so an operator who chose before this release is followed, and on every change.
@@ -1495,8 +1498,9 @@ export function startRpcServer(opts: {
         params: CaseCreateParams,
         handle: (p, ctx) => {
           const session = requireSession(store, ctx.conn);
-          const { client_request_id, ...input } = p as CaseCreateParams;
+          const { client_request_id, accepts_hold, ...input } = p as CaseCreateParams;
           store.setSessionTitle(session.sessionId, input.session_title);
+          let matchedCaseIds: string[] = [];
           // WAG-268: the same ask again (same title and need) while the first is still open is the agent
           // retrying after a restart or a compaction. It gets the open case back, never a second one.
           if (input.follows === undefined && input.replaces === undefined) {
@@ -1508,12 +1512,39 @@ export function startRpcServer(opts: {
               if (found) return { ...found, replaced_answer_note: null, words_warning: null };
             }
           }
+          // WAG-416: the check for past decisions. Only a decision (not a review) that follows and replaces nothing and
+          // that no Ask less rule decides, and only for a shim that can show the hold.
+          if (accepts_hold === true && input.follows === undefined && input.replaces === undefined) {
+            try {
+              if (store.askKindOf(input) === "question" && !store.wouldAutoDecide(input)) {
+                const target = taskForAsk(store, session, input);
+                const checked = askCheck.run({
+                  sessionId: session.sessionId,
+                  title: input.title,
+                  requestId: client_request_id,
+                  search: () => store.searchDecided(store.taskProject(target), input),
+                  onHeld: (n) => store.recordAskCheck("ask_held", n),
+                  onFailed: () => store.recordAskCheck("ask_check_failed"),
+                });
+                if (checked.action === "hold") return { held: true as const, matches: checked.matches };
+                matchedCaseIds = checked.matchedCaseIds;
+              }
+            } catch {
+              // The ask goes through. A failed check never blocks it.
+              try {
+                store.recordAskCheck("ask_check_failed");
+              } catch {
+                // The usage log is best effort.
+              }
+            }
+          }
           const created = store.createCase(
             taskForAsk(store, session, input),
             input,
             session.runtime,
             client_request_id ? { sessionId: session.sessionId, clientRequestId: client_request_id } : undefined,
             { id: session.sessionId, cwd: store.findSession(session.sessionId)?.cwd ?? "" },
+            matchedCaseIds,
           );
           // WAG-267: a new ask is visible work after the answers this session got.
           store.markRepliesApplied(session.sessionId);

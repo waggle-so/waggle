@@ -187,9 +187,9 @@ describe("migration 41: items_json and item_answers_json", () => {
   }
 
   test("migration 41 is additive (WAG-345 added 42, WAG-354 added 43, WAG-366 added 44, WAG-367 added 45, WAG-377 added 46 after it)", () => {
-    expect(MIGRATIONS[MIGRATIONS.length - 1]!.version).toBe(60);
+    expect(MIGRATIONS[MIGRATIONS.length - 1]!.version).toBe(61);
     const { db } = migrated();
-    expect(versionOf(db)).toBe(60);
+    expect(versionOf(db)).toBe(61);
     const cols = (t: string) => (db.query(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
     expect(cols("option_sets")).toContain("items_json");
     expect(cols("replies")).toContain("item_answers_json");
@@ -224,7 +224,7 @@ describe("migration 41: items_json and item_answers_json", () => {
     const { db, before } = migrated();
     const once = snapshot(db, before.columns);
     migrate(db);
-    expect(versionOf(db)).toBe(60);
+    expect(versionOf(db)).toBe(61);
     const twice = snapshot(db, before.columns);
     for (const [table, rows] of once.rows) expect(twice.rows.get(table)).toBe(rows);
   });

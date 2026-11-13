@@ -21,6 +21,7 @@ import {
 } from "../artifacts";
 import {
   CaseCreateResult,
+  CaseHoldResult,
   type DesignKit,
   type KnockSettingsResult,
   MCP_TOOLS,
@@ -610,8 +611,11 @@ async function handleKnockAsk(
 ): Promise<{ content: McpContent[] }> {
   const staged = withStagedArtifact(state, args);
   // HAIL-197: one id per tool call, reused by every retry of it, so a retry never makes a second ask.
-  const withId = { ...staged, client_request_id: randomUUID() };
-  const created = (await callDaemon(state, "case.create", withId, 15000, readFirstCreateTimeoutMs(), true)) as CaseCreateResult;
+  const withId = { ...staged, client_request_id: randomUUID(), accepts_hold: true };
+  const answer = (await callDaemon(state, "case.create", withId, 15000, readFirstCreateTimeoutMs(), true)) as CaseCreateResult | CaseHoldResult;
+  // WAG-416: past decisions of this project fit the ask. No case exists. Return the matches at once.
+  if ("held" in answer) return heldResult(answer);
+  const created = answer;
   // WAG-412: the operator's rule decided this ask. Return at once. The agent does not wait.
   if (created.auto_decided) return autoDecidedResult(created, isDesktopSession(state));
   const reply = await waitForReply(state, created.id);
@@ -629,6 +633,20 @@ async function handleKnockAsk(
     preface.push({ type: "text" as const, text: created.replaced_answer_note });
   }
   return preface.length > 0 ? { ...reply, content: [...preface, ...reply.content] } : reply;
+}
+
+export const HELD_NEXT =
+  "Waggle found past decisions in this project that fit this ask. No case was created and the human was not asked. " +
+  "Do one of three things. (1) Drop the ask and follow the past decision. " +
+  "(2) Send a better ask with waggle_ask that names the old decision and says what is new. " +
+  "(3) Send the same ask again with waggle_ask: Waggle then creates the case.";
+
+// WAG-416: what waggle_ask returns for a held ask. Words are exact: status, case_created, matches, next.
+function heldResult(held: CaseHoldResult): { content: McpContent[] } {
+  const meta = callMeta.getStore();
+  if (meta) meta.result = "answered";
+  const body = { status: "held", case_created: false, matches: held.matches, next: HELD_NEXT };
+  return { content: [{ type: "text" as const, text: JSON.stringify(body) }] };
 }
 
 export const AUTO_DECIDED_NEXT =

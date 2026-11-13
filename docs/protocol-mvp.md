@@ -1389,6 +1389,30 @@ Off by default. Decision record: `docs/decisions/2026-10-27-fewer-low-stakes-ask
 - **Usage log.** Migration 56 adds `usage.category` and `usage.rule_id` and the event `ask_auto_decided`. It holds the category slug and the rule id
   (`ask_less_<category>`), never ask or answer text. `ask_created` carries `category` (slug only) while the master is on. The export has both columns.
 
+### Past decisions: the check inside `waggle_ask` (WAG-416)
+
+The daemon keeps a full-text index (SQLite FTS5, table `decided_asks`, migration 61) of each decided ask: the title, the need,
+the option labels, the pick and the why. One row for each case, with its project. A reply that decides writes or updates the row
+(also `reply.replace`). A withdrawn (`replaces`) or dismissed case, a review and a case only an Ask less rule decided have no row.
+Migration 61 fills the index from old cases. It also adds `cases.matched_case_ids_json` and the usage events `ask_held` and
+`ask_check_failed`. The index is local. There is no model and no network call.
+
+- **Search.** `searchDecidedAsks(db, project, { title, need, optionLabels })` returns at most 3 strong matches, best first:
+  `{ case_id, question, pick, why, date }`. It only reads rows of the same project (`tasks.project`). A match is strong when at
+  least 60% of the significant words of the new title, and at least 2 words, are in the decided ask (title, need, option labels).
+- **Hold.** `case.create` takes `accepts_hold: true` (the shim sends it; an older shim does not, and is never held). On a decision
+  (not a review) with no `follows` and no `replaces`, and that no Ask less rule decides, the daemon searches the session's project.
+  With matches it creates no case and returns `{ "held": true, "matches": [...] }` instead of a `Case`. `waggle_ask` then returns
+  one text block: `{ "status": "held", "case_created": false, "matches": [...], "next": "..." }`. `next` tells the agent to do one of
+  three things: drop the ask, send a better ask that names the old decision, or send the same ask again.
+- **Second send.** The same session sending the same title (trimmed, case folded) within 15 minutes always creates the case. The
+  case stores the matched case ids (`Case.matched_case_ids`, an array of ids; absent when none). A retry of the held call (same
+  `client_request_id`) gets the hold again. A better ask (other title) is held again only for a match the session was not shown in
+  the window; otherwise it is created at once and stores the ids. The hold lives in daemon memory: a restart forgets it.
+- **Never held.** A review, an ask with `replaces` or `follows`, an ask a rule decides, an ask with no match, and any ask when the
+  search throws. A throw also records the usage event `ask_check_failed`.
+- **Usage log.** `ask_held` carries `n` (the number of matches) and `kind`. `ask_check_failed` carries nothing. No text.
+
 ### `case.dismiss` / `case.restore` (HAIL-32)
 
 `case.dismiss` sets a case's status to `resolved` and stamps `dismissed_at`, remembering the status
@@ -1954,7 +1978,7 @@ Session methods (shim only), settled in KNOCK-01:
 | Method | Params | Result |
 |---|---|---|
 | `session.hello` | `{ session_id, cwd, branch?, git_root?, parent_pid, runtime?, client_version?, can_nudge?, changes? }` | `{ session_id, task_id }` |
-| `case.create` | `waggle_ask` input + optional `client_request_id` (HAIL-197) | `Case` + `replaced_answer_note`, `words_warning` (both nullable) |
+| `case.create` | `waggle_ask` input + optional `client_request_id` (HAIL-197) and `accepts_hold` (WAG-416) | `Case` + `replaced_answer_note`, `words_warning` (both nullable); or `{ held: true, matches }` (WAG-416, see Past decisions) |
 | `case.wait` | `{ case_id, wait_ms }` | reply payload, or `{ status: "pending", case_id, waited_s? }` |
 | `case.update` | `waggle_update` input | `Case` + `words_warning` (nullable) |
 | `reply.ack` | `{ reply_id }` | `Reply` (the shim confirms it received the payload; only then `delivered`). `case.wait` returns `reply_id` beside the content. |

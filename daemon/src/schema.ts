@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { backfillCorrections } from "./corrections";
+import { backfillDecidedAsks, DECIDED_TABLE_SQL } from "./decided-index";
 
 // Versioned migrations (docs/protocol-mvp.md, KNOCK-02 acceptance: "Migrations
 // are versioned"). The applied version lives in PRAGMA user_version. Never edit
@@ -1568,6 +1569,38 @@ INSERT OR IGNORE INTO preferences (id, scope, project, text, evidence_count, quo
   FROM project_themes ORDER BY rowid;
 DROP TABLE project_themes;`);
       }
+    },
+  },
+  {
+    version: 61,
+    // The Brain's recall (WAG-416). Three changes:
+    // 1. decided_asks: a full-text index of the decided asks, filled here from the old cases.
+    // 2. cases.matched_case_ids_json: the past decisions that fit an ask, stored on the case that was created after them.
+    // 3. usage takes two events, ask_held and ask_check_failed. SQLite cannot alter a CHECK in place, so usage is
+    //    rebuilt from its own stored definition (every column and index stays, whatever other migrations added).
+    sql: ``,
+    up: (db) => {
+      db.exec(DECIDED_TABLE_SQL);
+      const has = (table: string, column: string) =>
+        (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+      if (!has("cases", "matched_case_ids_json")) db.exec(`ALTER TABLE cases ADD COLUMN matched_case_ids_json TEXT`);
+      const usage = db.query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usage'`).get() as { sql: string } | null;
+      if (usage && !usage.sql.includes("'ask_held'")) {
+        const rebuilt = usage.sql
+          .replace(/CREATE TABLE\s+"?usage"?/, "CREATE TABLE usage_new")
+          .replace("'compare_toggled'", "'compare_toggled', 'ask_held', 'ask_check_failed'");
+        if (!rebuilt.includes("'ask_held'") || !rebuilt.includes("usage_new")) throw new Error("migration 61: cannot rebuild usage");
+        const indexes = db
+          .query(`SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage' AND sql IS NOT NULL`)
+          .all() as { sql: string }[];
+        const columns = (db.query(`PRAGMA table_info(usage)`).all() as { name: string }[]).map((c) => c.name).join(", ");
+        db.exec(rebuilt);
+        db.exec(`INSERT INTO usage_new (${columns}) SELECT ${columns} FROM usage`);
+        db.exec(`DROP TABLE usage`);
+        db.exec(`ALTER TABLE usage_new RENAME TO usage`);
+        for (const index of indexes) db.exec(index.sql);
+      }
+      backfillDecidedAsks(db);
     },
   },
 ];
