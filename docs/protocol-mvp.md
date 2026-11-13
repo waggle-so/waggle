@@ -1326,6 +1326,7 @@ App and CLI methods:
 | `connectors.slack.send_test` | `{}` | `{ ok: true }` (HAIL-145) |
 | `connectors.slack.disconnect` | `{}` | `SlackStatus` (state `off`) (HAIL-145) |
 | `cases.resolved_stats` | `{}` | `{ count, bytes }` (HAIL-52, see "`cases.purge_resolved`" below) |
+| `stats.corrections` | `{ project?, weeks? }` | `{ project?, weeks: [{ week, starts, asks, corrections, per_ask }] }` (WAG-414, see "Corrections") |
 | `cases.purge_resolved` | `{}` | `{ purged_cases, freed_bytes }` (HAIL-52, see "`cases.purge_resolved`" below) |
 | `cases.auto_decided` | `{ since? }` | `Case[]` decided by a rule (WAG-412, see "Ask less") |
 | `case.change_mind` | `{ case_id }` | `Case`, open again (WAG-412, see "Ask less") |
@@ -2485,6 +2486,23 @@ Test overrides: `KNOCK_TELEGRAM_BASE_URL`, `KNOCK_SLACK_BASE_URL`, `KNOCK_SLACK_
 `KNOCK_RELAY_BASE_URL` (WAG-387) and `KNOCK_SECRET_STORE=memory` work only in a dev daemon (`bun run build`, which
 defines `KNOCK_DEV_BUILD=true`). `bun run build:release`, used by `scripts/release.sh` and `scripts/build-local.sh`,
 leaves it out: that daemon ignores all five. Unit tests pass fakes to the connector constructors and never use these variables.
+
+## Corrections (WAG-414)
+
+Migration 59 adds `replies.correction` (`1`, `0` or null) and `cases.mind_changed_at`. It also lets the usage log take the event `correction`.
+
+A reply is a correction when it decides (Decide, not Keep talking) and at least one of these is true:
+
+- A pick is not the recommended option. A multi-select pick is not the recommended set. An item with no recommendation is never a correction because of its pick.
+- The person wrote their own answer: the text of a reply item.
+- The person requested changes on a review (`request_changes`), or left comments on the reply.
+- The person used "Change my mind" on an auto-decided ask. `changeMind` sets `cases.mind_changed_at`, so the next deciding reply on that case is a correction.
+
+The daemon computes the flag from the stored reply (`daemon/src/corrections.ts`) when it stores or replaces the reply. `1` is a correction. `0` is a reply that decided and is not one. Null is a reply that did not decide (Keep talking, more detail, a feedback note). The migration backfills old replies from the stored picks, text and comments. A "Change my mind" of the past is not in the data: that reply keeps the flag its other rules give.
+
+The usage log gets `{ event: "correction", ask_h }` once per reply that becomes a correction. It holds no ask text and no reply text. The export keeps coded values only.
+
+`stats.corrections { project?, weeks = 12 }` returns `{ project?, weeks: [{ week, starts, asks, corrections, per_ask }] }`, oldest first. `week` is an ISO 8601 week such as `2026-W46`, in UTC. `starts` is its Monday. `asks` counts the cases with a deciding reply that week. `corrections` counts the flagged replies. `per_ask` is `corrections / asks` (two decimals), or null when `asks` is 0. A week with no asks is listed. Without `project` all projects count. Failed and superseded replies do not count.
 
 ## Project page (WAG-260)
 

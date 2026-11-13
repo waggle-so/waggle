@@ -25,6 +25,7 @@ import {
   toCaseListRow,
   CasesPurgeResolvedParams,
   CasesResolvedStatsParams,
+  StatsCorrectionsParams,
   CaseWaitParams,
   CaseWaitReply,
   ConnectorsStatusParams,
@@ -119,6 +120,7 @@ import { GUIDE_COMMENT_COUNT, GUIDE_DECISION_COUNT } from "./projects";
 import { askAgentText } from "./guide/asks";
 import { ChoiceNotOfferedError, FollowsCaseError, ReplacesCaseError, ReplyNotQueuedError, SESSION_RECONNECT_GRACE_S, toReplySummary } from "./store";
 import { isOlder } from "./version";
+import { correctionsByWeek } from "./corrections";
 
 // JSON-RPC 2.0 over a unix socket, one object per line
 // (docs/protocol-mvp.md "Socket RPC"). events.subscribe keeps the connection
@@ -603,6 +605,19 @@ export function startRpcServer(opts: {
     [
       "cases.resolved_stats",
       { params: CasesResolvedStatsParams, handle: () => store.resolvedCaseStats() },
+    ],
+    [
+      "stats.corrections",
+      {
+        params: StatsCorrectionsParams,
+        handle: (p) => {
+          const { project, weeks } = p as StatsCorrectionsParams;
+          return {
+            ...(project !== undefined ? { project } : {}),
+            weeks: correctionsByWeek(store.db, { ...(project !== undefined ? { project } : {}), weeks }),
+          };
+        },
+      },
     ],
     [
       "cases.purge_resolved",

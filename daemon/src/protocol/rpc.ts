@@ -488,6 +488,28 @@ export const CasesResolvedStatsResult = z.object({
 });
 export type CasesResolvedStatsResult = z.infer<typeof CasesResolvedStatsResult>;
 
+// stats.corrections (WAG-414): corrections per ask, by ISO week. A correction is a deciding reply the person did
+// not just accept (docs/protocol-mvp.md, "Corrections"). Without `project` every project counts; with it, one
+// project (the tasks.project tag). The last `weeks` weeks, oldest first, a week with no asks included.
+export const StatsCorrectionsParams = z.object({
+  project: z.string().min(1).optional(),
+  weeks: z.number().int().min(1).max(104).default(12),
+});
+export type StatsCorrectionsParams = z.infer<typeof StatsCorrectionsParams>;
+export const CorrectionWeek = z.object({
+  week: z.string().regex(/^\d{4}-W\d{2}$/),
+  starts: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  asks: z.number().int().nonnegative(),
+  corrections: z.number().int().nonnegative(),
+  per_ask: z.number().nonnegative().nullable(),
+});
+export type CorrectionWeek = z.infer<typeof CorrectionWeek>;
+export const StatsCorrectionsResult = z.object({
+  project: z.string().optional(),
+  weeks: z.array(CorrectionWeek),
+});
+export type StatsCorrectionsResult = z.infer<typeof StatsCorrectionsResult>;
+
 // cases.purge_resolved (HAIL-52): deletes every resolved case - its messages,
 // replies, comments, captures and revisions, then its staged bundle
 // directories and any blob no surviving case's revision still references
