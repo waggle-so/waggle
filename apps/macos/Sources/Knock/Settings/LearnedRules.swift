@@ -257,7 +257,14 @@ struct LearnedRulesSection: View {
             }
             if model.loaded { footer }
         }
-        .task { await model.load() }
+        .id("learnedRules")
+        .task {
+            await model.load()
+            // Evidence only: KNOCK_EVIDENCE_RULES_OPEN=1 unfolds the first rule for a window capture.
+            if ProcessInfo.processInfo.environment["KNOCK_EVIDENCE_RULES_OPEN"] == "1", let first = model.rules.first {
+                await model.toggleExpanded(first)
+            }
+        }
     }
 
     private var list: some View {

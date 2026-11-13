@@ -103,7 +103,13 @@ struct SettingsPageChrome<Content: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             scroll
-                .onAppear { scrollToRequestedCard(proxy) }
+                .onAppear {
+                    scrollToRequestedCard(proxy)
+                    // Evidence only: KNOCK_EVIDENCE_SCROLL_TO=<id of a view on the page> brings it to the top.
+                    if let target = ProcessInfo.processInfo.environment["KNOCK_EVIDENCE_SCROLL_TO"] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { proxy.scrollTo(target, anchor: .top) }
+                    }
+                }
                 .onChange(of: router.card) { _, _ in scrollToRequestedCard(proxy) }
         }
     }
