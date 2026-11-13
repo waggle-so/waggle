@@ -2537,9 +2537,13 @@ A project is the `tasks.project` tag. Migration 35 adds `project_themes` and `pr
 Preferences (WAG-415, migration 60): migration 35 added `project_themes`. Migration 60 moves every row to the `preferences` table
 with scope `project` (same id, text, evidence count, quotes, on/off state and proposer) and drops `project_themes`. A preference
 has a scope: `project` (it has a project) or `all` (project NULL, it belongs to no project). `case_ids_json` and the quotes are
-evidence for the app only. `project.get` returns the `project` scope preferences, each with `scope` and `case_ids`.
+evidence for the app only. `project.get` returns the `project` scope preferences, each with `scope`, `project` (null for scope `all`) and `case_ids`.
 
-- `preference.list { scope: "project" | "all", project? }`: `{ items }`. Scope `project` needs `project`.
+- `preference.list { scope?: "project" | "all", project? }`: `{ items }`. Scope `project` needs `project`. With no scope (WAG-419, the Settings list) it returns every preference, scope `all` first, then project rules grouped by project name (case-insensitive), oldest first inside a group, and adds `projects: string[]`, the project names the daemon knows.
+- `preference.evidence { id }`: `{ items: [{ case_id, question, did }], project }`. One line per stored case id, in order; a case that is gone is left out. `question` is the case title. `did` is what the person did, from the newest decision reply: `Picked <option titles>.` (with the note after it), `Wrote: <text>`, `Asked for changes: <text>`, or empty with no deciding reply. `project` is the project most of the cases belong to, else the only project there is, else null: the target of "Only this project".
+- `preference.add { text, project? }`: the new preference. A rule written by hand has scope `all` unless `project` is given. A rule with the same text in that scope is turned on instead of copied. Evidence count 0, no cases.
+- `preference.update { id, text }`: the preference with the new text (trimmed, 200 characters at most). Evidence and on/off stay.
+- `preference.set_scope { id, scope, project? }`: the preference in its new scope. Scope `project` needs `project`. Evidence and on/off stay.
 - `preference.rules { session_id }`: `{ all: string[], project: string[] }`, the rule text of the preferences that are on. `project` holds the session's project only. The shim calls it at connect.
 - `project.theme_toggle { id, enabled }` works on a preference of either scope.
 - The connect text (`instructionsFor`) adds the block `## How this person decides` after the ask preferences. It lists the rules that are on, scope `all` first, then this project's. At most 30 lines in all (title and blank line included); the project rules are cut first. Rule text only: never evidence, quotes or case ids. With no rules there is no block. A session in project X never gets a project rule of project Y.

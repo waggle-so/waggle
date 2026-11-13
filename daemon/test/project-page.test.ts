@@ -227,6 +227,49 @@ describe("project RPCs", () => {
     }
   });
 
+  test("WAG-419: list with no scope, evidence, add, update and set_scope over the socket", async () => {
+    const home = tmpHome();
+    homes.push(home);
+    const store = new Store(new Database(join(home, "knock.db")), home, new EventBus());
+    const task = store.createTask({ name: "w", project: "waggle" });
+    const socketPath = join(home, "knock.sock");
+    servers.push(startRpcServer({ socketPath, store, bus: new EventBus(), version: pkg.version }));
+    const raw = await rpcConnect(socketPath);
+    const call = async (method: string, params: unknown) => {
+      const res = await raw.request(method, params);
+      if (res.error) throw new Error(String(res.error.message));
+      return res.result;
+    };
+    try {
+      const c1 = store.createCase(task.id, ask("Layout?")).id;
+      decide(store, c1, { choice: "b" });
+      store.projects.propose("waggle", null, [{ text: "Local rule", evidence_count: 2, quotes: [], case_ids: [c1] }]);
+      const added = (await call("preference.add", { text: "Be brief" })) as { id: string; scope: string };
+      expect(added.scope).toBe("all");
+      const inProject = (await call("preference.add", { text: "Use tabs", project: "waggle" })) as { scope: string };
+      expect(inProject.scope).toBe("project");
+      const list = (await call("preference.list", {})) as { items: { id: string; text: string }[]; projects: string[] };
+      expect(list.items.map((t) => t.text)).toEqual(["Be brief", "Local rule", "Use tabs"]);
+      expect(list.projects).toEqual(["waggle"]);
+      const local = list.items[1]!;
+      expect(await call("preference.evidence", { id: local.id })).toEqual({
+        items: [{ case_id: c1, question: "Layout?", did: "Picked Detailed." }],
+        project: "waggle",
+      });
+      const upd = (await call("preference.update", { id: local.id, text: "Local words" })) as { text: string };
+      expect(upd.text).toBe("Local words");
+      const moved = (await call("preference.set_scope", { id: local.id, scope: "all" })) as { scope: string; project: string | null };
+      expect(moved).toMatchObject({ scope: "all" });
+      await expect(call("preference.set_scope", { id: local.id, scope: "project" })).rejects.toBeDefined();
+      await expect(call("preference.update", { id: "nope", text: "x" })).rejects.toBeDefined();
+      await expect(call("preference.update", { id: local.id, text: "   " })).rejects.toBeDefined();
+      await expect(call("preference.evidence", { id: "nope" })).rejects.toBeDefined();
+      await expect(call("preference.add", { text: "" })).rejects.toBeDefined();
+    } finally {
+      raw.close();
+    }
+  });
+
   test("scope all: propose, list, toggle and rules over the socket", async () => {
     const home = tmpHome();
     homes.push(home);

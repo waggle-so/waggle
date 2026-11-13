@@ -66,6 +66,10 @@ import {
   ProjectRepoRecordsParams,
   ProjectThemeToggleParams,
   PreferenceListParams,
+  PreferenceEvidenceParams,
+  PreferenceAddParams,
+  PreferenceUpdateParams,
+  PreferenceSetScopeParams,
   PreferenceRulesParams,
   KnockAskInput,
   CaseCreateParams,
@@ -981,9 +985,57 @@ export function startRpcServer(opts: {
         params: PreferenceListParams,
         handle: (p) => {
           const { scope, project } = p as PreferenceListParams;
+          if (scope === undefined) return { items: store.projects.allPreferences(), projects: store.projects.projectNames() };
           if (scope === "all") return { items: store.projects.allThemes() };
           if (project === undefined) throw new RpcError(-32602, "scope project needs a project");
           return { items: store.projects.themes(project) };
+        },
+      },
+    ],
+    [
+      "preference.evidence",
+      {
+        params: PreferenceEvidenceParams,
+        handle: (p) => {
+          const { id } = p as PreferenceEvidenceParams;
+          const result = store.projects.evidence(id);
+          if (!result) throw new RpcError(-32602, "rule not found");
+          return result;
+        },
+      },
+    ],
+    [
+      "preference.add",
+      {
+        params: PreferenceAddParams,
+        handle: (p) => {
+          const { text, project } = p as PreferenceAddParams;
+          return store.projects.addPreference(text, project ?? null);
+        },
+      },
+    ],
+    [
+      "preference.update",
+      {
+        params: PreferenceUpdateParams,
+        handle: (p) => {
+          const { id, text } = p as PreferenceUpdateParams;
+          const theme = store.projects.setThemeText(id, text);
+          if (!theme) throw new RpcError(-32602, "rule not found");
+          return theme;
+        },
+      },
+    ],
+    [
+      "preference.set_scope",
+      {
+        params: PreferenceSetScopeParams,
+        handle: (p) => {
+          const { id, scope, project } = p as PreferenceSetScopeParams;
+          if (scope === "project" && project === undefined) throw new RpcError(-32602, "scope project needs a project");
+          const theme = store.projects.setThemeScope(id, scope === "all" ? null : project!);
+          if (!theme) throw new RpcError(-32602, "rule not found");
+          return theme;
         },
       },
     ],
