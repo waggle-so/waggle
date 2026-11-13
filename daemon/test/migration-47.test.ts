@@ -20,7 +20,7 @@ test("migration 47 keeps the usage rows and takes the new word", () => {
   expect(() => db.exec(`INSERT INTO usage (event, hour, variant) VALUES ('detail_format_picked', 'h', 'how_it_works')`)).toThrow();
   const before = db.query(`SELECT * FROM usage ORDER BY hour`).all();
   migrate(db);
-  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(58);
+  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(60);
   expect(db.query(`SELECT * FROM usage ORDER BY hour`).all()).toEqual(before);
   db.exec(`INSERT INTO usage (event, hour, variant) VALUES ('detail_format_picked', 'h', 'how_it_works')`);
   const indexes = (db.query(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage'`).all() as { name: string }[]).map((r) => r.name);
