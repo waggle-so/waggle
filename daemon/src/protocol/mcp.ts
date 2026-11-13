@@ -71,10 +71,35 @@ export const RUNTIME_NOTES: Record<Runtime, string> = {
 //
 // HAIL-163: `desktop` is true for a session that is not Claude Code (the Claude desktop app,
 // Cowork): its note replaces the Claude Code note. Claude Code sessions get today's text.
-export function instructionsFor(runtime: Runtime, askText?: string, desktop = false): string {
+export function instructionsFor(runtime: Runtime, askText?: string, desktop = false, rules?: DecisionRules): string {
   const note = desktop && runtime === "claude" ? DESKTOP_RUNTIME_NOTE : RUNTIME_NOTES[runtime];
-  const base = `${MCP_INSTRUCTIONS}\n\n${note}`;
-  return askText ? `${base}\n\n## Operator preferences · asks\n\n${askText}` : base;
+  let text = `${MCP_INSTRUCTIONS}\n\n${note}`;
+  if (askText) text += `\n\n## Operator preferences · asks\n\n${askText}`;
+  const block = decisionBlock(rules);
+  return block ? `${text}\n\n${block}` : text;
+}
+
+// WAG-415 (Waggle Brain): the preferences that are on, as rule text only. `all` holds the rules for
+// every project; `project` holds the rules of this session's project and no other.
+export interface DecisionRules {
+  all: string[];
+  project: string[];
+}
+export const DECISION_BLOCK_MAX_LINES = 30;
+export const DECISION_BLOCK_TITLE = "## How this person decides";
+const DECISION_RULE_MAX_CHARS = 200;
+
+// The block has at most DECISION_BLOCK_MAX_LINES lines, title and blank line included. `all` rules
+// come first, so the project rules are the ones cut when there are too many. No rules, no block.
+export function decisionBlock(rules: DecisionRules | undefined): string | null {
+  if (!rules) return null;
+  const clean = (list: string[]) =>
+    list
+      .map((r) => r.replace(/\s+/g, " ").trim())
+      .filter((r) => r !== "")
+      .map((r) => `- ${r.length <= DECISION_RULE_MAX_CHARS ? r : `${r.slice(0, DECISION_RULE_MAX_CHARS - 1).trimEnd()}…`}`);
+  const lines = [...clean(rules.all), ...clean(rules.project)].slice(0, DECISION_BLOCK_MAX_LINES - 2);
+  return lines.length === 0 ? null : [DECISION_BLOCK_TITLE, "", ...lines].join("\n");
 }
 
 // --- Tool descriptions (served by `waggle mcp`) ---
@@ -719,6 +744,11 @@ export const ThemeProposal = z.object({
   text: z.string().trim().min(1).max(200).describe("One short rule, for example: Plain words, never code."),
   evidence_count: z.number().int().nonnegative().describe("How many operator comments show this theme."),
   quotes: z.array(z.string().max(300)).max(3).default([]).describe("Up to 3 short quotes from the comments."),
+  case_ids: z.array(z.string().max(100)).max(10).optional().describe("Optional ids of the cases that show this rule. Only the Waggle app shows them."),
+  scope: z
+    .enum(["project", "all"])
+    .default("project")
+    .describe("project: the rule holds for this project only. all: the rule holds for every project, so it must name no project and hold no project content."),
 });
 export type ThemeProposal = z.infer<typeof ThemeProposal>;
 export const KnockThemesInput = z.object({
@@ -727,9 +757,11 @@ export const KnockThemesInput = z.object({
 });
 export type KnockThemesInput = z.infer<typeof KnockThemesInput>;
 export const KNOCK_THEMES_DESCRIPTION =
-  "Propose the operator's taste themes for this project, from the comments in waggle_guide topic project. " +
-  "Send up to 8 themes with text, evidence_count and up to 3 quotes. Waggle merges a theme with an existing " +
-  "one that has similar text. It never turns an off theme on. Returns what was added and what was merged.";
+  "Propose the operator's taste themes (preferences), from the comments in waggle_guide topic project. " +
+  "Send up to 8 themes with text, evidence_count and up to 3 quotes. Give each theme a scope: project (default) " +
+  "for a rule about this project, all for a short rule that holds in every project (it must name no project). " +
+  "Waggle merges a theme with an existing one of the same scope that has similar text. It never turns an off theme on. " +
+  "Returns what was added and what was merged.";
 
 // waggle_settings (HAIL-166). `action` get ignores the fields. set needs at least one of them; the
 // daemon checks that, and every limit, with a message that says what to fix.

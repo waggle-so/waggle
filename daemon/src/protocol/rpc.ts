@@ -1053,11 +1053,14 @@ export const ProjectDecision = z.object({
   option_count: z.number().int().nonnegative(),
   artifact_kind: z.string().nullable(),
 });
+export const PreferenceScope = z.enum(["project", "all"]);
 export const ProjectTheme = z.object({
   id: z.string(),
+  scope: PreferenceScope,
   text: z.string(),
   evidence_count: z.number().int().nonnegative(),
   quotes: z.array(z.string()),
+  case_ids: z.array(z.string()),
   enabled: z.boolean(),
   proposed_by: z.string().nullable(),
   created_at: z.string(),
@@ -1070,6 +1073,14 @@ export const ProjectDecisionsParams = z.object({
 });
 export const ProjectDecisionsResult = z.object({ items: z.array(ProjectDecision), total: z.number().int() });
 export const ProjectGetParams = z.object({ project: z.string() });
+// preference.list: the preferences of one scope. Scope project needs the project name.
+export const PreferenceListParams = z.object({ scope: PreferenceScope, project: z.string().optional() });
+export type PreferenceListParams = z.infer<typeof PreferenceListParams>;
+// preference.rules: the rule text for the connect text of a session. Text only.
+export const PreferenceRulesParams = z.object({ session_id: z.string() });
+export type PreferenceRulesParams = z.infer<typeof PreferenceRulesParams>;
+export const PreferenceRulesResult = z.object({ all: z.array(z.string()), project: z.array(z.string()) });
+export type PreferenceRulesResult = z.infer<typeof PreferenceRulesResult>;
 export const ProjectThemeToggleParams = z.object({ id: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsParams = z.object({ project: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsResult = z.object({ project: z.string(), repo_records: z.boolean() });

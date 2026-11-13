@@ -20,7 +20,7 @@ test("migration 48 adds the sharing tables and cascades with the case", () => {
            VALUES ('c1', 't1', 'question', 'T', 'N', 'W', 'a', 'R', '[]', 'needs_you', '2026-01-01', '2026-01-01')`);
   migrate(db);
   migrate(db);
-  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(59);
+  expect((db.query("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(60);
   db.exec(`INSERT INTO relay_shares (case_id, relay_id, url, mode, created_at) VALUES ('c1', 'r1', 'https://x/d/r1', 'link', 'now')`);
   db.exec(`INSERT INTO relay_comments (id, case_id, round_seq, author_name, author_kind, body, created_ms) VALUES ('k1', 'c1', 1, 'Ada', 'guest', 'hi', 5)`);
   expect(() => db.exec(`UPDATE relay_shares SET mode = 'public' WHERE case_id = 'c1'`)).toThrow();

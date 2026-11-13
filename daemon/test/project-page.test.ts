@@ -128,8 +128,8 @@ describe("themes", () => {
 describe("project guide topic", () => {
   const base = { project: "waggle", decisions: [], themes: [], repoRecords: false, stale: false, comments: [] };
   const themes = [
-    { id: "1", text: "Plain words", evidence_count: 2, quotes: [], enabled: true, proposed_by: null, created_at: "", updated_at: "" },
-    { id: "2", text: "Dark chrome", evidence_count: 2, quotes: [], enabled: false, proposed_by: null, created_at: "", updated_at: "" },
+    { id: "1", scope: "project" as const, case_ids: [] as string[], text: "Plain words", evidence_count: 2, quotes: [], enabled: true, proposed_by: null, created_at: "", updated_at: "" },
+    { id: "2", scope: "project" as const, case_ids: [] as string[], text: "Dark chrome", evidence_count: 2, quotes: [], enabled: false, proposed_by: null, created_at: "", updated_at: "" },
   ];
 
   test("is listed and the ask description points at it", () => {
@@ -223,6 +223,45 @@ describe("project RPCs", () => {
       await expect(client.call("project.theme_toggle", { id: "nope", enabled: true })).rejects.toBeDefined();
     } finally {
       client.close();
+    }
+  });
+
+  test("scope all: propose, list, toggle and rules over the socket", async () => {
+    const home = tmpHome();
+    homes.push(home);
+    const store = new Store(new Database(join(home, "knock.db")), home, new EventBus());
+    const task = store.createTask({ name: "w", project: "waggle" });
+    store.createSession(task.id, { id: "sess-1", cwd: "/work", branch: null, pid: 4242 });
+    const socketPath = join(home, "knock.sock");
+    servers.push(startRpcServer({ socketPath, store, bus: new EventBus(), version: pkg.version }));
+    const raw = await rpcConnect(socketPath);
+    const call = async (method: string, params: unknown) => {
+      const res = await raw.request(method, params);
+      if (res.error) throw new Error(String(res.error.message));
+      return res.result;
+    };
+    try {
+      const prop = (await call("knock_themes", {
+        session_id: "sess-1",
+        action: "propose",
+        themes: [
+          { text: "Local rule", evidence_count: 1, quotes: [] },
+          { text: "Global rule", evidence_count: 3, quotes: ["q"], case_ids: ["c_1"], scope: "all" },
+        ],
+      })) as { added: { id: string; scope: string }[] };
+      expect(prop.added.map((t) => t.scope)).toEqual(["project", "all"]);
+      const all = (await call("preference.list", { scope: "all" })) as { items: { id: string; case_ids: string[] }[] };
+      expect(all.items).toHaveLength(1);
+      expect(all.items[0]!.case_ids).toEqual(["c_1"]);
+      const proj = (await call("preference.list", { scope: "project", project: "waggle" })) as { items: { text: string }[] };
+      expect(proj.items.map((t) => t.text)).toEqual(["Local rule"]);
+      await expect(call("preference.list", { scope: "project" })).rejects.toBeDefined();
+      expect(await call("preference.rules", { session_id: "sess-1" })).toEqual({ all: ["Global rule"], project: ["Local rule"] });
+      await call("project.theme_toggle", { id: all.items[0]!.id, enabled: false });
+      expect(await call("preference.rules", { session_id: "sess-1" })).toEqual({ all: [], project: ["Local rule"] });
+      expect(await call("preference.rules", { session_id: "unknown" })).toEqual({ all: [], project: [] });
+    } finally {
+      raw.close();
     }
   });
 });

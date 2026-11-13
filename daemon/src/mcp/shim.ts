@@ -34,6 +34,7 @@ import {
   type ToolErrorKind,
   Runtime,
   instructionsFor,
+  type DecisionRules,
 } from "../protocol";
 import { reachModeNote } from "../guide/asks";
 import { AskReach } from "../protocol/rpc";
@@ -222,13 +223,14 @@ export function runMcp(): Promise<number> {
       ready.then(async () => {
         if (!setUp) return null;
         state.knownReach = await fetchReach(state, false);
-        return fetchAskText(state);
+        const [askText, rules] = await Promise.all([fetchAskText(state), fetchDecisionRules(state)]);
+        return { askText, rules };
       }),
       new Promise<null>((r) => setTimeout(() => r(null), readInstructionsWaitMs())),
     ]);
     const server = new Server(
       { name: "knock", version: pkg.version },
-      { capabilities: { tools: { listChanged: true } }, instructions: setUp ? instructionsFor(runtime, prefs ?? undefined, isDesktopSession(state)) : NOT_SET_UP_TEXT },
+      { capabilities: { tools: { listChanged: true } }, instructions: setUp ? instructionsFor(runtime, prefs?.askText ?? undefined, isDesktopSession(state), prefs?.rules ?? undefined) : NOT_SET_UP_TEXT },
     );
     state.server = server;
     // HAIL-173: the client's name arrives with `initialize`, after the first hello. Say hello again
@@ -317,6 +319,18 @@ async function fetchAskText(state: ShimState): Promise<string | null> {
     return typeof result.value === "string" && result.value.length > 0 ? result.value : null;
   } catch {
     // An older daemon without the key, or one that went away: no preferences.
+    return null;
+  }
+}
+
+// WAG-415: the rule text of the preferences that are on (scope all, then this session's project).
+async function fetchDecisionRules(state: ShimState): Promise<DecisionRules | null> {
+  try {
+    const result = (await state.client.call("preference.rules", { session_id: state.sessionId }, 3000)) as Partial<DecisionRules>;
+    const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+    return { all: strings(result.all), project: strings(result.project) };
+  } catch {
+    // An older daemon without the method, or one that went away: no block.
     return null;
   }
 }
@@ -720,14 +734,14 @@ async function handleKnockThemes(
   args: Record<string, unknown>,
 ): Promise<{ content: McpContent[] }> {
   const result = (await callDaemon(state, "knock_themes", { ...args, session_id: state.sessionId }, 5000)) as {
-    added: { text: string }[];
-    merged: { text: string; enabled: boolean }[];
+    added: { text: string; scope?: string }[];
+    merged: { text: string; enabled: boolean; scope?: string }[];
   };
   const lines = [
     `Added ${result.added.length} theme${result.added.length === 1 ? "" : "s"}.`,
-    ...result.added.map((t) => `+ ${t.text}`),
+    ...result.added.map((t) => `+ ${t.text}${t.scope === "all" ? " (all projects)" : ""}`),
     `Merged ${result.merged.length} with themes that already exist.`,
-    ...result.merged.map((t) => `= ${t.text}${t.enabled ? "" : " (off, stays off)"}`),
+    ...result.merged.map((t) => `= ${t.text}${t.scope === "all" ? " (all projects)" : ""}${t.enabled ? "" : " (off, stays off)"}`),
   ];
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 }

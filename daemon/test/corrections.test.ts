@@ -327,7 +327,7 @@ describe("migration 59 backfill", () => {
     const more = store.submitReply(talk.id, { ...base, idempotency_key: key(), intent: "more_detail", format: "eli5" });
     db.query(`UPDATE replies SET correction = NULL`).run();
     db.exec(`INSERT INTO usage (event, hour, n) VALUES ('ask_created', '2026-11-01T10:00:00.000Z', 1)`);
-    expect(db.query(`PRAGMA user_version`).get()).toMatchObject({ user_version: 59 });
+    expect((db.query(`PRAGMA user_version`).get() as { user_version: number }).user_version).toBeGreaterThanOrEqual(59);
     // The same function the migration runs.
     expect(backfillCorrections(db)).toBe(1);
     expect(flagOf(db, ok.id)).toBe(0);
@@ -356,7 +356,7 @@ describe("migration 59 backfill", () => {
     fill("replies", { id: "r1", case_id: "c1", idempotency_key: "i1", choice: "b", intent: "decision", state: "delivered" });
     fill("replies", { id: "r2", case_id: "c1", idempotency_key: "i2", choice: "a", intent: "decision", state: "delivered" });
     migrate(db);
-    expect(db.query(`PRAGMA user_version`).get()).toMatchObject({ user_version: 59 });
+    expect((db.query(`PRAGMA user_version`).get() as { user_version: number }).user_version).toBeGreaterThanOrEqual(59);
     expect(flagOf(db, "r1")).toBe(1);
     expect(flagOf(db, "r2")).toBe(0);
     db.exec(`INSERT INTO usage (event, hour) VALUES ('correction', 'h')`);

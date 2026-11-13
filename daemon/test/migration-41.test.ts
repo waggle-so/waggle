@@ -187,9 +187,9 @@ describe("migration 41: items_json and item_answers_json", () => {
   }
 
   test("migration 41 is additive (WAG-345 added 42, WAG-354 added 43, WAG-366 added 44, WAG-367 added 45, WAG-377 added 46 after it)", () => {
-    expect(MIGRATIONS[MIGRATIONS.length - 1]!.version).toBe(59);
+    expect(MIGRATIONS[MIGRATIONS.length - 1]!.version).toBe(60);
     const { db } = migrated();
-    expect(versionOf(db)).toBe(59);
+    expect(versionOf(db)).toBe(60);
     const cols = (t: string) => (db.query(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
     expect(cols("option_sets")).toContain("items_json");
     expect(cols("replies")).toContain("item_answers_json");
@@ -197,11 +197,13 @@ describe("migration 41: items_json and item_answers_json", () => {
 
   test("every row of every table survives, and every old column is byte equal", () => {
     const { db, before, counts } = migrated();
-    for (const [table, n] of counts) expect(count(db, table)).toBe(n);
+    // WAG-415: migration 60 moved project_themes to preferences (test/preferences.test.ts covers the rows).
+    const moved = new Set(["project_themes"]);
+    for (const [table, n] of counts) if (!moved.has(table)) expect(count(db, table)).toBe(n);
     expect(counts.get("cases")).toBe(7);
     expect(counts.get("replies")).toBe(9);
     const after = snapshot(db, before.columns);
-    for (const [table, rows] of before.rows) expect(after.rows.get(table)).toBe(rows);
+    for (const [table, rows] of before.rows) if (!moved.has(table)) expect(after.rows.get(table)).toBe(rows);
   });
 
   test("the new columns are NULL in every existing row", () => {
@@ -222,7 +224,7 @@ describe("migration 41: items_json and item_answers_json", () => {
     const { db, before } = migrated();
     const once = snapshot(db, before.columns);
     migrate(db);
-    expect(versionOf(db)).toBe(59);
+    expect(versionOf(db)).toBe(60);
     const twice = snapshot(db, before.columns);
     for (const [table, rows] of once.rows) expect(twice.rows.get(table)).toBe(rows);
   });
