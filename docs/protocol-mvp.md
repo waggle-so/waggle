@@ -1409,6 +1409,8 @@ Migration 61 fills the index from old cases. It also adds `cases.matched_case_id
   case stores the matched case ids (`Case.matched_case_ids`, an array of ids; absent when none). A retry of the held call (same
   `client_request_id`) gets the hold again. A better ask (other title) is held again only for a match the session was not shown in
   the window; otherwise it is created at once and stores the ids. The hold lives in daemon memory: a restart forgets it.
+- **In the app.** The case view reads `matched_case_ids` as optional. It shows "Based on N past decisions" and, on a click, the
+  titles of the cases that still exist. A deleted case is left out; if none are left, there is no line.
 - **Never held.** A review, an ask with `replaces` or `follows`, an ask a rule decides, an ask with no match, and any ask when the
   search throws. A throw also records the usage event `ask_check_failed`.
 - **Usage log.** `ask_held` carries `n` (the number of matches) and `kind`. `ask_check_failed` carries nothing. No text.
