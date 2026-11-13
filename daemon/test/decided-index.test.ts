@@ -188,12 +188,12 @@ describe("search", () => {
   test("it never returns a case from another project", () => {
     const { db, store, task } = setup("waggle");
     decide(store, ask("Which cache backend for sessions?", "Pick one.", ["Use Redis", "Use SQLite"]), task.id);
-    const other = store.createTask({ name: "other", project: "omea" });
+    const other = store.createTask({ name: "other", project: "other-repo" });
     const otherId = decide(store, ask("Which cache backend for sessions?", "Pick one.", ["Use Redis", "Use SQLite"]), other.id, "b");
     const mine = searchDecidedAsks(db, "waggle", q("Which cache backend for sessions?"));
     expect(mine).toHaveLength(1);
     expect(mine.map((m) => m.case_id)).not.toContain(otherId);
-    expect(searchDecidedAsks(db, "omea", q("Which cache backend for sessions?")).map((m) => m.case_id)).toEqual([otherId]);
+    expect(searchDecidedAsks(db, "other-repo", q("Which cache backend for sessions?")).map((m) => m.case_id)).toEqual([otherId]);
     expect(searchDecidedAsks(db, "nobody", q("Which cache backend for sessions?"))).toEqual([]);
   });
 
