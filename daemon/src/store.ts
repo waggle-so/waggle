@@ -128,6 +128,7 @@ import {
 import { POINT_DEFAULT_CHOICES, pointOptionLabel } from "./protocol/nouns";
 import { DesignKit, EMPTY_DESIGN_KIT, type DesignKitChange } from "./protocol/design-kit";
 import { noteBucket, replyOutcome, UsageLogger } from "./usage";
+import { storedReplyCorrection } from "./corrections";
 import type { ToolCallLog } from "./usage/tools";
 
 // The five shapes an ingest() call can return, one per artifact kind
@@ -637,7 +638,7 @@ export class Store {
     const now = new Date().toISOString();
     const events: Event[] = [];
     this.db.transaction(() => {
-      this.db.query(`UPDATE cases SET status = 'needs_you', auto_at = NULL, updated_at = ? WHERE id = ?`).run(now, caseId);
+      this.db.query(`UPDATE cases SET status = 'needs_you', auto_at = NULL, mind_changed_at = ?, updated_at = ? WHERE id = ?`).run(now, now, caseId);
       events.push(this.appendEvent("case.updated", { case_id: caseId }));
     })();
     for (const event of events) this.bus?.emit(event);
@@ -2290,6 +2291,7 @@ export class Store {
     }
     this.storeReplyOptionSet(id, this.resolveOptionSet(caseId, input));
     this.insertCapturesAndComments(caseId, id, input);
+    this.storeCorrection(id);
     // The files are copied last: a rejected reply above leaves nothing in attachments/.
     let incomingDirs: string[] = [];
     if (input.attachments !== undefined && input.attachments.length > 0) {
@@ -2349,6 +2351,18 @@ export class Store {
           comment.anchor !== undefined ? JSON.stringify(comment.anchor) : null,
           comment.text,
         );
+    }
+  }
+
+  // WAG-414: sets replies.correction from the stored reply (src/corrections.ts) and, for a correction, logs the
+  // coded `correction` event. Runs inside the reply's transaction, after the comments are stored. The event
+  // carries the ask hash only. A replaced reply that stays a correction logs no second event.
+  private storeCorrection(replyId: string): void {
+    const flag = storedReplyCorrection(this.db, replyId);
+    const before = this.db.query(`SELECT correction, case_id FROM replies WHERE id = ?`).get(replyId) as { correction: number | null; case_id: string };
+    this.db.query(`UPDATE replies SET correction = ? WHERE id = ?`).run(flag, replyId);
+    if (flag === 1 && before.correction !== 1 && this.usage) {
+      this.usage.record({ event: "correction", ask_h: this.usage.askHash(before.case_id) });
     }
   }
 
@@ -2451,6 +2465,7 @@ export class Store {
         );
       this.storeReplyOptionSet(replyId, this.resolveOptionSet(row.case_id, { ...input, intent }));
       this.insertCapturesAndComments(row.case_id, replyId, input);
+      this.storeCorrection(replyId);
       if (input.attachments !== undefined) {
         const ingested = ingestReplyAttachments({
           inputs: input.attachments,

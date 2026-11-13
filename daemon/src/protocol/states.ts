@@ -157,6 +157,8 @@ export const UsageEventType = z.enum([
   "ask_auto_decided",
   // WAG-413: the Compare switch of the screenshot header.
   "compare_toggled",
+  // WAG-414: a deciding reply that is a correction. Carries the ask hash only, no text.
+  "correction",
 ]);
 export type UsageEventType = z.infer<typeof UsageEventType>;
 

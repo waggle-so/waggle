@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { backfillCorrections } from "./corrections";
 
 // Versioned migrations (docs/protocol-mvp.md, KNOCK-02 acceptance: "Migrations
 // are versioned"). The applied version lives in PRAGMA user_version. Never edit
@@ -1512,7 +1513,85 @@ CREATE INDEX idx_usage_ask ON usage(ask_h);
     // Additive. An older daemon ignores the index, so a rollback is safe.
     sql: `CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, type, at);`,
   },
+  {
+    version: 59,
+    // Brain corrections (WAG-414). replies.correction is 1 when the person did not just accept the agent's
+    // proposal (src/corrections.ts), 0 for a reply that decided without one, null for a reply that did not decide. cases.mind_changed_at marks a case the person took back from a rule
+    // ("Change my mind"), so its later reply counts as a correction. usage is recreated for the coded event
+    // `correction` (SQLite cannot alter a CHECK in place); its rows and indexes are kept. The old replies get
+    // the flag from the data they kept; a "Change my mind" of the past is not in the data and stays 0.
+    sql: "",
+    up: (db) => {
+      db.exec(USAGE_WITH_CORRECTION_SQL);
+      // Guarded like the migrations above: a test rewinds user_version and runs them again. The backfill runs
+      // only when this run adds the column, so a re-run never overwrites a stored flag.
+      const has = (table: string, name: string): boolean =>
+        (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === name);
+      if (!has("cases", "mind_changed_at")) db.exec(`ALTER TABLE cases ADD COLUMN mind_changed_at TEXT`);
+      if (!has("replies", "correction")) {
+        db.exec(`ALTER TABLE replies ADD COLUMN correction INTEGER CHECK (correction IN (0, 1))`);
+        backfillCorrections(db);
+      }
+    },
+  },
 ];
+
+const USAGE_WITH_CORRECTION_SQL = `
+CREATE TABLE usage_new (
+  event TEXT NOT NULL CHECK (event IN (
+    'ask_created', 'reply_submitted', 'revision_added', 'reply_delivered', 'reply_failed',
+    'reply_retried', 'ask_pending_timeout', 'session_started', 'case_opened',
+    'comment_mode_started', 'artifact_opened_full', 'review_opened', 'preview_interacted',
+    'option_picked', 'recommendation_accepted', 'reply_typed', 'ask_more_detail_opened',
+    'change_answer_started', 'go_back_clicked', 'sessions_panel_opened',
+    'session_detail_opened', 'screenshot_zoom_changed', 'screenshot_set_view_opened',
+    'comment_added', 'nudge_clicked', 'copy_prompt_clicked', 'ask_dismissed', 'ask_restored',
+    'round_added', 'app_launched', 'app_active', 'onboarding_started',
+    'onboarding_agent_connected', 'onboarding_continued', 'first_job_started',
+    'first_job_finished', 'onboarding_prompt_copied', 'tour_started', 'tour_finished',
+    'tour_skipped', 'getting_started_line_opened', 'getting_started_hidden',
+    'settings_page_opened', 'usage_exported', 'new_idea_opened', 'new_idea_started',
+    'launch_target_chosen', 'project_page_opened', 'update_prompt_shown',
+    'update_install_clicked', 'update_later_clicked', 'update_skipped',
+    'update_restart_clicked', 'whats_new_opened', 'split_fold_toggled', 'sources_list_opened',
+    'source_opened', 'artifact_variant_selected', 'detail_format_picked', 'quick_reply_picked',
+    'ask_auto_decided', 'compare_toggled', 'correction'
+  )),
+  hour TEXT NOT NULL,
+  n INTEGER,
+  duration_s INTEGER,
+  kind TEXT CHECK (kind IN ('question', 'review')),
+  artifact_kind TEXT CHECK (artifact_kind IN ('screenshot', 'html_bundle', 'markdown', 'screenshots', 'diagram')),
+  outcome TEXT CHECK (outcome IN ('took_recommendation', 'other_option', 'message_only')),
+  source TEXT CHECK (source IN (
+    'notification', 'menu_bar', 'queue', 'sessions_panel', 'auto_advance',
+    'keyboard', 'click', 'number_key', 'button', 'shortcut', 'mac', 'telegram', 'slack'
+  )),
+  project_h TEXT,
+  after_s TEXT CHECK (after_s IN ('0-2', '3-10', '11-60', '60+')),
+  variant TEXT CHECK (variant IN (
+    'fit', '100', 'zoom', 'point', 'region', 'agents', 'notifications', 'previews',
+    'artifacts', 'asks', 'phone', 'updates', 'data', 'help', 'claudeTerminal', 'codexTerminal',
+    'claudeApp', 'codexApp', 'claudeSuperset', 'codexSuperset', 'conductor', 'claudeT3',
+    'codexT3', 'session', 'queue', 'ask', 'both', 'connect', 'job', 'decision', 'talk',
+    'design_kit', 'claude', 'codex', 'tradeoffs', 'prototype', 'numbers', 'example', 'something_else', 'screenshots', 'how_it_works',
+    'lets_discuss', 'my_comments', 'show_more', 'on', 'off'
+  )),
+  ask_h TEXT,
+  intent TEXT CHECK (intent IN ('decision', 'more_detail', 'discuss')),
+  format TEXT CHECK (format IN ('eli5', 'diagram', 'page', 'none')),
+  stage TEXT CHECK (stage IN ('questions', 'approaches', 'design', 'spec')),
+  note TEXT CHECK (note IN ('none', '1-20', '21-100', '101-400', '400+')),
+  category TEXT CHECK (category IN ('naming', 'wording', 'formatting', 'tests')),
+  rule_id TEXT CHECK (rule_id IN ('ask_less_naming', 'ask_less_wording', 'ask_less_formatting', 'ask_less_tests'))
+);
+INSERT INTO usage_new (event, hour, n, duration_s, kind, artifact_kind, outcome, source, project_h, after_s, variant, ask_h, intent, format, stage, note, category, rule_id)
+  SELECT event, hour, n, duration_s, kind, artifact_kind, outcome, source, project_h, after_s, variant, ask_h, intent, format, stage, note, category, rule_id FROM usage;
+DROP TABLE usage;
+ALTER TABLE usage_new RENAME TO usage;
+CREATE INDEX idx_usage_hour ON usage(hour);
+CREATE INDEX idx_usage_ask ON usage(ask_h);
+`;
 
 export function migrate(db: Database): void {
   const row = db.query("PRAGMA user_version").get() as { user_version: number };
