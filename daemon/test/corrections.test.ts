@@ -104,6 +104,16 @@ describe("correction rules", () => {
     expect(flagOf(db, r.id)).toBe(1);
   });
 
+  test("a written answer with no recommendation, or equal to it, is not a correction", () => {
+    const { db, store, task } = setup();
+    const free: KnockAskInput = { title: "Name it", need: "What name should it have?", why: "Free text." } as KnockAskInput;
+    const r1 = store.submitReply(store.createCase(task.id, free).id, { ...base, idempotency_key: key(), message: "Call it rowReader." });
+    expect(flagOf(db, r1.id)).toBe(0);
+    const same: KnockAskInput = { title: "Name it", need: "What name should it have?", why: "Free text.", recommendation: "parseRow", recommendation_why: "Short." } as KnockAskInput;
+    const r2 = store.submitReply(store.createCase(task.id, same).id, { ...base, idempotency_key: key(), message: " parserow " });
+    expect(flagOf(db, r2.id)).toBe(0);
+  });
+
   test("a multi-item ask: one off-recommendation pick makes the reply a correction", () => {
     const { db, store, task } = setup();
     const ask = {

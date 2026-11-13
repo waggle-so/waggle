@@ -7,7 +7,7 @@ import { type Item, type ItemAnswer, itemsOfRound, normalizeReply, replyOutcome 
 //
 // A correction is a deciding reply (Decide, never Keep talking) where at least one is true:
 //   pick        a pick is not the recommended option (an item with no recommendation never counts here),
-//   own         the person wrote their own answer (the text of a reply item),
+//   own         the person wrote their own answer, and it differs from the agent's proposal,
 //   changes     the person requested changes on a review, or left comments,
 //   changed_mind  the person used "Change my mind" on an auto-decided ask.
 export type CorrectionReason = "pick" | "own" | "changes" | "changed_mind";
@@ -58,8 +58,15 @@ export function correctionReason(input: CorrectionInput): CorrectionReason | nul
     item_answers: input.item_answers,
   });
   for (const answer of answers) {
-    if (answer.text !== undefined) return "own";
     const item = input.items.find((i) => i.id === answer.item_id);
+    if (answer.text !== undefined) {
+      // A written answer corrects the agent only when it differs from what the agent proposed. A reply item
+      // with no recommendation has nothing to correct.
+      const proposed = item === undefined ? [] : recommended(item);
+      const norm = (t: string) => t.trim().replace(/\s+/g, " ").toLowerCase();
+      if (proposed.length > 0 && !proposed.some((p) => norm(p) === norm(answer.text!))) return "own";
+      continue;
+    }
     if (item === undefined) continue;
     const rec = recommended(item);
     if (rec.length === 0) continue; // no recommendation: the pick cannot be a correction
