@@ -1326,6 +1326,7 @@ App and CLI methods:
 | `connectors.slack.send_test` | `{}` | `{ ok: true }` (HAIL-145) |
 | `connectors.slack.disconnect` | `{}` | `SlackStatus` (state `off`) (HAIL-145) |
 | `cases.resolved_stats` | `{}` | `{ count, bytes }` (HAIL-52, see "`cases.purge_resolved`" below) |
+| `stats.corrections` | `{ project?, weeks? }` | `{ project?, weeks: [{ week, starts, asks, corrections, per_ask }] }` (WAG-414, see "Corrections") |
 | `cases.purge_resolved` | `{}` | `{ purged_cases, freed_bytes }` (HAIL-52, see "`cases.purge_resolved`" below) |
 | `cases.auto_decided` | `{ since? }` | `Case[]` decided by a rule (WAG-412, see "Ask less") |
 | `case.change_mind` | `{ case_id }` | `Case`, open again (WAG-412, see "Ask less") |
@@ -1387,6 +1388,32 @@ Off by default. Decision record: `docs/decisions/2026-10-27-fewer-low-stakes-ask
   With the master off the section is absent.
 - **Usage log.** Migration 56 adds `usage.category` and `usage.rule_id` and the event `ask_auto_decided`. It holds the category slug and the rule id
   (`ask_less_<category>`), never ask or answer text. `ask_created` carries `category` (slug only) while the master is on. The export has both columns.
+
+### Past decisions: the check inside `waggle_ask` (WAG-416)
+
+The daemon keeps a full-text index (SQLite FTS5, table `decided_asks`, migration 61) of each decided ask: the title, the need,
+the option labels, the pick and the why. One row for each case, with its project. A reply that decides writes or updates the row
+(also `reply.replace`). A withdrawn (`replaces`) or dismissed case, a review and a case only an Ask less rule decided have no row.
+Migration 61 fills the index from old cases. It also adds `cases.matched_case_ids_json` and the usage events `ask_held` and
+`ask_check_failed`. The index is local. There is no model and no network call.
+
+- **Search.** `searchDecidedAsks(db, project, { title, need, optionLabels })` returns at most 3 strong matches, best first:
+  `{ case_id, question, pick, why, date }`. It only reads rows of the same project (`tasks.project`). A match is strong when at
+  least 60% of the significant words of the new title, and at least 2 words, are in the decided ask (title, need, option labels).
+- **Hold.** `case.create` takes `accepts_hold: true` (the shim sends it; an older shim does not, and is never held). On a decision
+  (not a review) with no `follows` and no `replaces`, and that no Ask less rule decides, the daemon searches the session's project.
+  With matches it creates no case and returns `{ "held": true, "matches": [...] }` instead of a `Case`. `waggle_ask` then returns
+  one text block: `{ "status": "held", "case_created": false, "matches": [...], "next": "..." }`. `next` tells the agent to do one of
+  three things: drop the ask, send a better ask that names the old decision, or send the same ask again.
+- **Second send.** The same session sending the same title (trimmed, case folded) within 15 minutes always creates the case. The
+  case stores the matched case ids (`Case.matched_case_ids`, an array of ids; absent when none). A retry of the held call (same
+  `client_request_id`) gets the hold again. A better ask (other title) is held again only for a match the session was not shown in
+  the window; otherwise it is created at once and stores the ids. The hold lives in daemon memory: a restart forgets it.
+- **In the app.** The case view reads `matched_case_ids` as optional. It shows "Based on N past decisions" and, on a click, the
+  titles of the cases that still exist. A deleted case is left out; if none are left, there is no line.
+- **Never held.** A review, an ask with `replaces` or `follows`, an ask a rule decides, an ask with no match, and any ask when the
+  search throws. A throw also records the usage event `ask_check_failed`.
+- **Usage log.** `ask_held` carries `n` (the number of matches) and `kind`. `ask_check_failed` carries nothing. No text.
 
 ### `case.dismiss` / `case.restore` (HAIL-32)
 
@@ -1953,7 +1980,7 @@ Session methods (shim only), settled in KNOCK-01:
 | Method | Params | Result |
 |---|---|---|
 | `session.hello` | `{ session_id, cwd, branch?, git_root?, parent_pid, runtime?, client_version?, can_nudge?, changes? }` | `{ session_id, task_id }` |
-| `case.create` | `waggle_ask` input + optional `client_request_id` (HAIL-197) | `Case` + `replaced_answer_note`, `words_warning` (both nullable) |
+| `case.create` | `waggle_ask` input + optional `client_request_id` (HAIL-197) and `accepts_hold` (WAG-416) | `Case` + `replaced_answer_note`, `words_warning` (both nullable); or `{ held: true, matches }` (WAG-416, see Past decisions) |
 | `case.wait` | `{ case_id, wait_ms }` | reply payload, or `{ status: "pending", case_id, waited_s? }` |
 | `case.update` | `waggle_update` input | `Case` + `words_warning` (nullable) |
 | `reply.ack` | `{ reply_id }` | `Reply` (the shim confirms it received the payload; only then `delivered`). `case.wait` returns `reply_id` beside the content. |
@@ -2486,12 +2513,44 @@ Test overrides: `KNOCK_TELEGRAM_BASE_URL`, `KNOCK_SLACK_BASE_URL`, `KNOCK_SLACK_
 defines `KNOCK_DEV_BUILD=true`). `bun run build:release`, used by `scripts/release.sh` and `scripts/build-local.sh`,
 leaves it out: that daemon ignores all five. Unit tests pass fakes to the connector constructors and never use these variables.
 
+## Corrections (WAG-414)
+
+Migration 59 adds `replies.correction` (`1`, `0` or null) and `cases.mind_changed_at`. It also lets the usage log take the event `correction`.
+
+A reply is a correction when it decides (Decide, not Keep talking) and at least one of these is true:
+
+- A pick is not the recommended option. A multi-select pick is not the recommended set. An item with no recommendation is never a correction because of its pick.
+- The person wrote their own answer: the text of a reply item.
+- The person requested changes on a review (`request_changes`), or left comments on the reply.
+- The person used "Change my mind" on an auto-decided ask. `changeMind` sets `cases.mind_changed_at`, so the next deciding reply on that case is a correction.
+
+The daemon computes the flag from the stored reply (`daemon/src/corrections.ts`) when it stores or replaces the reply. `1` is a correction. `0` is a reply that decided and is not one. Null is a reply that did not decide (Keep talking, more detail, a feedback note). The migration backfills old replies from the stored picks, text and comments. A "Change my mind" of the past is not in the data: that reply keeps the flag its other rules give.
+
+The usage log gets `{ event: "correction", ask_h }` once per reply that becomes a correction. It holds no ask text and no reply text. The export keeps coded values only.
+
+`stats.corrections { project?, weeks = 12 }` returns `{ project?, weeks: [{ week, starts, asks, corrections, per_ask }] }`, oldest first. `week` is an ISO 8601 week such as `2026-W46`, in UTC. `starts` is its Monday. `asks` counts the cases with a deciding reply that week. `corrections` counts the flagged replies. `per_ask` is `corrections / asks` (two decimals), or null when `asks` is 0. A week with no asks is listed. Without `project` all projects count. Failed and superseded replies do not count.
+
 ## Project page (WAG-260)
 
 A project is the `tasks.project` tag. Migration 35 adds `project_themes` and `project_prefs`.
 
+Preferences (WAG-415, migration 60): migration 35 added `project_themes`. Migration 60 moves every row to the `preferences` table
+with scope `project` (same id, text, evidence count, quotes, on/off state and proposer) and drops `project_themes`. A preference
+has a scope: `project` (it has a project) or `all` (project NULL, it belongs to no project). `case_ids_json` and the quotes are
+evidence for the app only. `project.get` returns the `project` scope preferences, each with `scope`, `project` (null for scope `all`) and `case_ids`.
+
+- `preference.list { scope?: "project" | "all", project? }`: `{ items }`. Scope `project` needs `project`. With no scope (WAG-419, the Settings list) it returns every preference, scope `all` first, then project rules grouped by project name (case-insensitive), oldest first inside a group, and adds `projects: string[]`, the project names the daemon knows.
+- `preference.evidence { id }`: `{ items: [{ case_id, question, did }], project }`. One line per stored case id, in order; a case that is gone is left out. `question` is the case title. `did` is what the person did, from the newest decision reply: `Picked <option titles>.` (with the note after it), `Wrote: <text>`, `Asked for changes: <text>`, or empty with no deciding reply. `project` is the project most of the cases belong to, else the only project there is, else null: the target of "Only this project".
+- `preference.add { text, project? }`: the new preference. A rule written by hand has scope `all` unless `project` is given. A rule with the same text in that scope is turned on instead of copied. Evidence count 0, no cases.
+- `preference.update { id, text }`: the preference with the new text (trimmed, 200 characters at most). Evidence and on/off stay.
+- `preference.set_scope { id, scope, project? }`: the preference in its new scope. Scope `project` needs `project`. Evidence and on/off stay.
+- `preference.rules { session_id }`: `{ all: string[], project: string[] }`, the rule text of the preferences that are on. `project` holds the session's project only. The shim calls it at connect.
+- `project.theme_toggle { id, enabled }` works on a preference of either scope.
+- The connect text (`instructionsFor`) adds the block `## How this person decides` after the ask preferences. It lists the rules that are on, scope `all` first, then this project's. At most 30 lines in all (title and blank line included); the project rules are cut first. Rule text only: never evidence, quotes or case ids. With no rules there is no block. A session in project X never gets a project rule of project Y.
+
 - `project.get { project }`: `decisions`, `comments`, `last_decision_at`, `repo_records`, `themes`.
 - `project.decisions { project, limit = 50, offset = 0 }`: `{ items, total }`, newest first. A case counts once, when its newest non-failed, non-superseded decision reply has a choice. Dismissed and withdrawn cases do not count. `why` is the reply note, else the `recommendation_why` of the option set the reply chose from.
 - `project.theme_toggle { id, enabled }` and `project.set_repo_records { project, enabled }`.
-- MCP `waggle_themes { action: "propose", themes: [{ text, evidence_count, quotes[≤3] }] }` (at most 8; alias `knock_themes`). The daemon merges by case-insensitive exact or prefix text and never turns an off theme on.
+- MCP `waggle_themes { action: "propose", themes: [{ text, evidence_count, quotes[≤3], case_ids?[≤10], scope?: "project" | "all" }] }` (at most 8; alias `knock_themes`). `scope` defaults to `project`. The daemon merges by case-insensitive exact or prefix text within the same scope and never turns an off theme on, for both scopes.
 - `waggle_guide` topic `project`: the last 10 decisions, the ON themes, the `docs/decisions/` instruction when the switch is on, and, when themes are stale (none proposed yet, or more than 20 new comments since), the last 50 comments. A comment is a pin on a reply or the note of a decision reply.
+- `waggle_guide` topic `project`, corrections (WAG-417): with 5 or more new corrections (`replies.correction = 1`, one for each ask) since `project_prefs.last_proposed_at`, the guide asks the agent to propose rules with `waggle_themes`. It lists those asks, newest first, 20 at most: question, what the agent recommended, what the person did. The text tells the agent to write one short line for each rule, give a scope, use `all` only for a rule true outside the project, and send `case_ids`. A proposal sets `last_proposed_at`, so the count starts again. No payload change.

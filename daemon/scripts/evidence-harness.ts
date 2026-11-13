@@ -3572,6 +3572,41 @@ async function endedAnswered(): Promise<void> {
   console.log(`REPLY_ENDED_ANSWERED=${replyId}`);
 }
 
+// WAG-418: a case that carries `matched_case_ids`. Two decided asks, then a similar ask: held once, then sent again.
+async function pastDecisions(): Promise<void> {
+  const client = new DaemonClient();
+  await client.connect(daemonPaths().socket);
+  const cwd = mkdtempSync(join(tmpdir(), "knock-evidence-"));
+  await client.call(
+    "session.hello",
+    { session_id: randomUUID(), cwd, branch: "Waggle test", git_root: null, parent_pid: process.pid },
+    5000,
+  );
+  const options = [
+    { id: "a", label: "A · parseRow" },
+    { id: "b", label: "B · readRow" },
+  ];
+  const base = { kind: "question" as const, why: "Both read well.", recommendation: "a", recommendation_why: "It matches the other helpers.", options };
+  for (const title of ["Name the helper that parses a table row", "What to name the helper that parses a table row"]) {
+    const made = (await client.call("case.create", { ...base, title, need: "Pick one name." }, 15000)) as { id: string };
+    await client.call(
+      "reply.submit",
+      { case_id: made.id, idempotency_key: randomUUID(), choice: "a", intent: "decision", comments: [], captures: [] },
+      5000,
+    );
+    console.log(`CASE_DECIDED=${made.id}`);
+  }
+  const ask = { ...base, title: "Name the helper that parses a table row", need: "Pick one name for the new helper.", accepts_hold: true };
+  const first = (await client.call("case.create", ask, 15000)) as { held?: boolean };
+  console.log(`FIRST_HELD=${first.held === true}`);
+  const second = (await client.call("case.create", ask, 15000)) as { id: string; matched_case_ids?: string[] };
+  console.log(`CASE_MATCHED=${second.id}`);
+  console.log(`MATCHED_IDS=${(second.matched_case_ids ?? []).join(",")}`);
+  console.log("PAST_READY=1");
+  await new Promise<void>((resolve) => process.on("SIGTERM", () => resolve()));
+  client.close();
+}
+
 const [cmd, arg] = process.argv.slice(2);
 if (cmd === "headlessBusy") {
   await headlessBusy(arg ?? "home");
@@ -3656,6 +3691,8 @@ if (cmd === "headlessBusy") {
 } else if (cmd === "planAsk") {
   if (arg?.startsWith("mixed-")) await planAskMixed(arg);
   else await planAsk(arg);
+} else if (cmd === "pastDecisions") {
+  await pastDecisions();
 } else if (cmd === "nudge") {
   await nudge();
 } else if (cmd === "doneUpdate") {
@@ -3663,6 +3700,6 @@ if (cmd === "headlessBusy") {
 } else if (cmd === "replace" && arg) {
   await replace(arg);
 } else {
-  console.error("usage: evidence-harness.ts setup | steps | diagram | reproBundle <dir> | caughtUp [zero] | tallPage | previews | sessions | sessionContext | sessionAsks [text|prototype] | paneAsks [text|plain|prototype|fresh] | manySessions | waitCount | updates | answered | orbs [extra] | bigBundles | timeoutFallback | shotSet | variantSet | onePage | nudge | doneUpdate | decision | detailQuestion | detailFormat | updateOptions | multiSelect | multiSelectRoundTrip <log path> | compareDemo [screenshot|screenshots|first] | revisionUpdate [screenshots|screenshot|bundle|markdown|commented|noArtifact] | replace <reply_id> | planAsk <questions|approaches|design|spec|all|mixed-questions|mixed-approaches|mixed-design|mixed-spec>");
+  console.error("usage: evidence-harness.ts setup | steps | diagram | reproBundle <dir> | caughtUp [zero] | tallPage | previews | sessions | sessionContext | sessionAsks [text|prototype] | paneAsks [text|plain|prototype|fresh] | manySessions | waitCount | updates | answered | orbs [extra] | bigBundles | timeoutFallback | shotSet | variantSet | onePage | pastDecisions | nudge | doneUpdate | decision | detailQuestion | detailFormat | updateOptions | multiSelect | multiSelectRoundTrip <log path> | compareDemo [screenshot|screenshots|first] | revisionUpdate [screenshots|screenshot|bundle|markdown|commented|noArtifact] | replace <reply_id> | planAsk <questions|approaches|design|spec|all|mixed-questions|mixed-approaches|mixed-design|mixed-spec>");
   process.exit(2);
 }

@@ -616,6 +616,7 @@ struct AsksSettingsView: View {
         SettingsPageChrome(title: SettingsPage.asks.title, subtitle: SettingsPage.asks.subtitle) {
             AskPreferencesView(model: model)
             AskLessSection(client: client)
+            LearnedRulesSection(client: client)
             Text("New sessions get this at the start. Running sessions hear about a new level on their next Waggle call, and read other changes the next time they open Waggle's guide.")
                 .knockTextStyle(Theme.Typography.body12_5w400)
                 .foregroundColor(Theme.Colors.ink3)
