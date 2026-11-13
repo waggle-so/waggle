@@ -13,6 +13,20 @@ const MAX_QUOTE_TEXT = 160;
 export const STALE_COMMENT_COUNT = 20;
 export const GUIDE_COMMENT_COUNT = 50;
 export const GUIDE_DECISION_COUNT = 10;
+// WAG-417: this many new corrections since the last proposal make the guide ask for rules.
+export const CORRECTION_TRIGGER_COUNT = 5;
+// The most corrected asks the guide lists.
+export const GUIDE_CORRECTION_COUNT = 20;
+const MAX_CORRECTION_TEXT = 120;
+
+// One corrected ask: the question, what the agent recommended, and what the person did.
+export interface CorrectedAsk {
+  case_id: string;
+  question: string;
+  recommended: string;
+  outcome: string;
+  at: string;
+}
 
 export interface DecisionRecord {
   case_id: string;
@@ -133,6 +147,16 @@ const DECISIONS_FROM = `
     ORDER BY created_at DESC, rowid DESC LIMIT 1)
   WHERE t.project = ?1 AND c.withdrawn_at IS NULL AND c.dismissed_at IS NULL`;
 
+// The newest correction reply of each ask. A failed or superseded reply does not count.
+const CORRECTIONS_FROM = `
+  FROM cases c
+  JOIN tasks t ON t.id = c.task_id
+  JOIN replies r ON r.id = (
+    SELECT id FROM replies
+    WHERE case_id = c.id AND correction = 1 AND state NOT IN ('failed', 'superseded')
+    ORDER BY created_at DESC, rowid DESC LIMIT 1)
+  WHERE t.project = ?1`;
+
 export class ProjectLog {
   constructor(private readonly db: Database) {}
 
@@ -222,6 +246,72 @@ export class ProjectLog {
       this.db.query(`SELECT COUNT(*) AS n FROM (${COMMENTS_SQL}) WHERE at > ?2`).get(project, last) as { n: number }
     ).n;
     return n > STALE_COMMENT_COUNT;
+  }
+
+  // Corrections (replies.correction = 1) after the last proposal. All of them with no proposal yet.
+  newCorrectionCount(project: string): number {
+    const last = this.prefs(project).last_proposed_at;
+    return (
+      this.db
+        .query(`SELECT COUNT(DISTINCT r.case_id) AS n ${CORRECTIONS_FROM} AND (?2 IS NULL OR r.created_at > ?2)`)
+        .get(project, last) as { n: number }
+    ).n;
+  }
+
+  // True at CORRECTION_TRIGGER_COUNT new corrections or more.
+  correctionsDue(project: string): boolean {
+    return this.newCorrectionCount(project) >= CORRECTION_TRIGGER_COUNT;
+  }
+
+  // The corrected asks after the last proposal, newest first. One entry for each ask: its newest correction.
+  correctedAsks(project: string, limit = GUIDE_CORRECTION_COUNT): CorrectedAsk[] {
+    const last = this.prefs(project).last_proposed_at;
+    const rows = this.db
+      .query(
+        `SELECT c.id AS case_id, c.title, c.options_json, c.recommendation, c.recommendation_why,
+                r.id AS reply_id, r.choice, r.choices_json, r.message, r.created_at AS at,
+                (SELECT seq FROM reply_option_sets WHERE reply_id = r.id) AS seq
+         ${CORRECTIONS_FROM} AND (?2 IS NULL OR r.created_at > ?2)
+         ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?3`,
+      )
+      .all(project, last, limit) as {
+      case_id: string;
+      title: string;
+      options_json: string;
+      recommendation: string;
+      recommendation_why: string;
+      reply_id: string;
+      choice: string | null;
+      choices_json: string | null;
+      message: string | null;
+      at: string;
+      seq: number | null;
+    }[];
+    return rows.map((row) => {
+      const { options } = this.optionSet(row.case_id, row.seq, row.options_json, row.recommendation_why);
+      const name = (id: string) => {
+        const o = options.find((x) => x.id === id);
+        return o ? (o.title ?? o.label) : id;
+      };
+      const picked = row.choices_json !== null ? (JSON.parse(row.choices_json) as string[]) : row.choice ? [row.choice] : [];
+      const comments = (
+        this.db.query(`SELECT text FROM comments WHERE reply_id = ? AND TRIM(text) <> '' ORDER BY rowid`).all(row.reply_id) as { text: string }[]
+      ).map((c) => clip(c.text, MAX_CORRECTION_TEXT));
+      const note = clip(row.message ?? "", MAX_CORRECTION_TEXT);
+      const parts: string[] = [];
+      if (picked.includes("request_changes")) parts.push("asked for changes");
+      else if (picked.length > 0 && !picked.every((id) => id === row.recommendation)) parts.push(`picked ${picked.map(name).join(", ")}`);
+      if (comments.length > 0) parts.push(`comments: ${comments.join(" / ")}`);
+      if (note !== "") parts.push(picked.length === 0 ? `wrote own answer: ${note}` : `wrote: ${note}`);
+      if (parts.length === 0) parts.push("changed the answer");
+      return {
+        case_id: row.case_id,
+        question: clip(row.title, MAX_CORRECTION_TEXT),
+        recommended: row.recommendation === "" ? "" : name(row.recommendation),
+        outcome: parts.join("; "),
+        at: row.at,
+      };
+    });
   }
 
   // The preferences with scope project for one project.
