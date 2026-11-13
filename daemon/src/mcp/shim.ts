@@ -21,7 +21,6 @@ import {
 } from "../artifacts";
 import {
   CaseCreateResult,
-  CaseHoldResult,
   type DesignKit,
   type KnockSettingsResult,
   MCP_TOOLS,
@@ -35,7 +34,6 @@ import {
   type ToolErrorKind,
   Runtime,
   instructionsFor,
-  type DecisionRules,
 } from "../protocol";
 import { reachModeNote } from "../guide/asks";
 import { AskReach } from "../protocol/rpc";
@@ -224,14 +222,13 @@ export function runMcp(): Promise<number> {
       ready.then(async () => {
         if (!setUp) return null;
         state.knownReach = await fetchReach(state, false);
-        const [askText, rules] = await Promise.all([fetchAskText(state), fetchDecisionRules(state)]);
-        return { askText, rules };
+        return fetchAskText(state);
       }),
       new Promise<null>((r) => setTimeout(() => r(null), readInstructionsWaitMs())),
     ]);
     const server = new Server(
       { name: "knock", version: pkg.version },
-      { capabilities: { tools: { listChanged: true } }, instructions: setUp ? instructionsFor(runtime, prefs?.askText ?? undefined, isDesktopSession(state), prefs?.rules ?? undefined) : NOT_SET_UP_TEXT },
+      { capabilities: { tools: { listChanged: true } }, instructions: setUp ? instructionsFor(runtime, prefs ?? undefined, isDesktopSession(state)) : NOT_SET_UP_TEXT },
     );
     state.server = server;
     // HAIL-173: the client's name arrives with `initialize`, after the first hello. Say hello again
@@ -320,18 +317,6 @@ async function fetchAskText(state: ShimState): Promise<string | null> {
     return typeof result.value === "string" && result.value.length > 0 ? result.value : null;
   } catch {
     // An older daemon without the key, or one that went away: no preferences.
-    return null;
-  }
-}
-
-// WAG-415: the rule text of the preferences that are on (scope all, then this session's project).
-async function fetchDecisionRules(state: ShimState): Promise<DecisionRules | null> {
-  try {
-    const result = (await state.client.call("preference.rules", { session_id: state.sessionId }, 3000)) as Partial<DecisionRules>;
-    const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
-    return { all: strings(result.all), project: strings(result.project) };
-  } catch {
-    // An older daemon without the method, or one that went away: no block.
     return null;
   }
 }
@@ -611,11 +596,8 @@ async function handleKnockAsk(
 ): Promise<{ content: McpContent[] }> {
   const staged = withStagedArtifact(state, args);
   // HAIL-197: one id per tool call, reused by every retry of it, so a retry never makes a second ask.
-  const withId = { ...staged, client_request_id: randomUUID(), accepts_hold: true };
-  const answer = (await callDaemon(state, "case.create", withId, 15000, readFirstCreateTimeoutMs(), true)) as CaseCreateResult | CaseHoldResult;
-  // WAG-416: past decisions of this project fit the ask. No case exists. Return the matches at once.
-  if ("held" in answer) return heldResult(answer);
-  const created = answer;
+  const withId = { ...staged, client_request_id: randomUUID() };
+  const created = (await callDaemon(state, "case.create", withId, 15000, readFirstCreateTimeoutMs(), true)) as CaseCreateResult;
   // WAG-412: the operator's rule decided this ask. Return at once. The agent does not wait.
   if (created.auto_decided) return autoDecidedResult(created, isDesktopSession(state));
   const reply = await waitForReply(state, created.id);
@@ -633,20 +615,6 @@ async function handleKnockAsk(
     preface.push({ type: "text" as const, text: created.replaced_answer_note });
   }
   return preface.length > 0 ? { ...reply, content: [...preface, ...reply.content] } : reply;
-}
-
-export const HELD_NEXT =
-  "Waggle found past decisions in this project that fit this ask. No case was created and the human was not asked. " +
-  "Do one of three things. (1) Drop the ask and follow the past decision. " +
-  "(2) Send a better ask with waggle_ask that names the old decision and says what is new. " +
-  "(3) Send the same ask again with waggle_ask: Waggle then creates the case.";
-
-// WAG-416: what waggle_ask returns for a held ask. Words are exact: status, case_created, matches, next.
-function heldResult(held: CaseHoldResult): { content: McpContent[] } {
-  const meta = callMeta.getStore();
-  if (meta) meta.result = "answered";
-  const body = { status: "held", case_created: false, matches: held.matches, next: HELD_NEXT };
-  return { content: [{ type: "text" as const, text: JSON.stringify(body) }] };
 }
 
 export const AUTO_DECIDED_NEXT =
@@ -752,14 +720,14 @@ async function handleKnockThemes(
   args: Record<string, unknown>,
 ): Promise<{ content: McpContent[] }> {
   const result = (await callDaemon(state, "knock_themes", { ...args, session_id: state.sessionId }, 5000)) as {
-    added: { text: string; scope?: string }[];
-    merged: { text: string; enabled: boolean; scope?: string }[];
+    added: { text: string }[];
+    merged: { text: string; enabled: boolean }[];
   };
   const lines = [
     `Added ${result.added.length} theme${result.added.length === 1 ? "" : "s"}.`,
-    ...result.added.map((t) => `+ ${t.text}${t.scope === "all" ? " (all projects)" : ""}`),
+    ...result.added.map((t) => `+ ${t.text}`),
     `Merged ${result.merged.length} with themes that already exist.`,
-    ...result.merged.map((t) => `= ${t.text}${t.scope === "all" ? " (all projects)" : ""}${t.enabled ? "" : " (off, stays off)"}`),
+    ...result.merged.map((t) => `= ${t.text}${t.enabled ? "" : " (off, stays off)"}`),
   ];
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 }
