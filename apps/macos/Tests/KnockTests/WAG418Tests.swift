@@ -4,7 +4,7 @@ import Foundation
 
 /// WAG-418: "Based on N past decisions" on the case view.
 struct WAG418Tests {
-    private let base = #"{"id":"c_1","task_id":"t_1","kind":"question","title":"Name the helper","need":"N","why":"W","recommendation":"a","recommendation_why":"RW","options":[{"id":"a","label":"Call it parseRow","title":"parseRow"}],"status":"open","has_artifact":false,"runtime":"claude","created_at":"2026-10-27T10:00:00.000Z","updated_at":"2026-10-27T10:00:00.000Z""#
+    private let base = #"{"id":"c_1","task_id":"t_1","kind":"question","title":"Name the helper","need":"N","why":"W","recommendation":"a","recommendation_why":"RW","options":[{"id":"a","label":"Call it parseRow","title":"parseRow"}],"status":"resolved","has_artifact":false,"runtime":"claude","created_at":"2026-10-27T10:00:00.000Z","updated_at":"2026-10-27T10:00:00.000Z""#
 
     @Test func decodesWithTheKey() throws {
         let json = base + #","matched_case_ids":["c_a","c_b"]}"#
