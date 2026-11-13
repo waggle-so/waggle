@@ -148,7 +148,6 @@ const CLICK_EVENTS: [string, string][] = [
   ["session_detail_opened", "opened a session"],
   ["screenshot_zoom_changed", "changed the screenshot zoom"],
   ["compare_toggled", "turned Compare on or off"],
-  ["correction", "answered with a correction"],
   ["screenshot_set_view_opened", "opened a screenshot set view"],
   ["comment_added", "added a comment"],
   ["comment_mode_started", "started comment mode"],

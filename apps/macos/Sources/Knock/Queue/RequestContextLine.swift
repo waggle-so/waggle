@@ -92,7 +92,6 @@ struct RequestContextLine: View {
     /// The status line's view (`RequestStatusLineView`), with its buttons.
     var statusView: AnyView? = nil
     let onOpenCase: (String) -> Void
-    private let client: KnockClient?
 
     @StateObject private var loader: FollowedCaseLoader
     @State private var isAnswerOpen = false
@@ -106,7 +105,6 @@ struct RequestContextLine: View {
         onOpenCase: @escaping (String) -> Void
     ) {
         self.item = item
-        self.client = client
         self.planRounds = planRounds
         self.viewingRevision = viewingRevision
         self.onSeeRevision = onSeeRevision
@@ -150,9 +148,6 @@ struct RequestContextLine: View {
                 // `.track`: margin-bottom 12.
                 PlanWordTrack(plan: plan, rounds: planRounds, viewingRevision: viewingRevision, onSeeRevision: onSeeRevision)
                     .padding(.bottom, 12)
-            }
-            if let ids = item.matchedCaseIds, !ids.isEmpty {
-                PastDecisionsLine(ids: ids, client: client, onOpenCase: onOpenCase)
             }
             Color.clear.frame(width: 0, height: 0)
         }

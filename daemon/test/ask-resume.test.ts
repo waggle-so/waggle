@@ -235,15 +235,9 @@ describe("an open ask survives a restart or a cancel (WAG-268)", () => {
     const caseId = extractCaseId(textOf(await client.callTool({ name: "waggle_ask", arguments: question })));
     store.createReply(caseId, { idempotency_key: "k-again", choice: "a", message: "A.", comments: [], captures: [] });
     await client.callTool({ name: "waggle_check", arguments: { case_id: caseId } });
-    // WAG-416: the answered ask is a past decision of this project, so the first send is held with it.
-    const held = await client.callTool({ name: "waggle_ask", arguments: question });
-    expect(JSON.parse(textOf(held))).toMatchObject({ status: "held", case_created: false, matches: [{ case_id: caseId }] });
-    expect(store.listCases()).toHaveLength(1);
-    // The same ask again creates the new case.
     const next = await client.callTool({ name: "waggle_ask", arguments: question });
     expect(extractCaseId(textOf(next))).not.toBe(caseId);
     expect(store.listCases()).toHaveLength(2);
-    expect(store.caseById(extractCaseId(textOf(next)))?.matched_case_ids).toEqual([caseId]);
   }, 20000);
 
   test("a session from another folder cannot take the case, and the error says what to do", async () => {
