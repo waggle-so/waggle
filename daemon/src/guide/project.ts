@@ -1,4 +1,4 @@
-import type { DecisionRecord, Theme } from "../projects";
+import type { CorrectedAsk, DecisionRecord, Theme } from "../projects";
 
 // WAG-260: the `project` topic of waggle_guide. ASD-STE100 text: short sentences, one meaning per word.
 
@@ -9,6 +9,9 @@ export interface ProjectGuideData {
   repoRecords: boolean;
   stale: boolean;
   comments: string[];
+  // WAG-417: true at 5 new corrections. The list holds the corrected asks, newest first.
+  correctionsDue?: boolean;
+  corrections?: CorrectedAsk[];
 }
 
 export const PROJECT_TOPIC_PLACEHOLDER =
@@ -42,6 +45,29 @@ export function projectGuide(d: ProjectGuideData): string {
       "After a decision, write one markdown file in your own repo: docs/decisions/YYYY-MM-DD-<slug>.md.",
       "The file has these parts: question, options, pick, why, date.",
       "Commit the file with your work. Waggle does not write into your repo.",
+    );
+  }
+  if (d.correctionsDue) {
+    out.push(
+      "",
+      "## Propose rules from the corrections",
+      "",
+      "The person corrected you many times in this project. Read the asks below, newest first.",
+      "Find how the person decides. Then call waggle_themes with action propose.",
+      "Write each rule as one short line about how the person decides.",
+      "Give each rule a scope. Use project (the default) for a rule about this project.",
+      "Use all only for a rule that is true outside this project.",
+      "A rule with scope all never names the project, a file, a person or any project content. Agents in other projects read it.",
+      "Send case_ids: the ask ids behind each rule.",
+      "",
+      "WRONG: scope all, text \"Keep the Waggle sidebar narrow\". It names the project.",
+      "right: scope all, text \"Prefer a short answer with one clear pick\". It holds in every project.",
+      "",
+    );
+    (d.corrections ?? []).forEach((c, i) =>
+      out.push(
+        `${i + 1}. [${c.case_id}] ${c.question} You recommended: ${c.recommended === "" ? "nothing" : c.recommended}. The person: ${c.outcome}.`.replace(/\s+/g, " "),
+      ),
     );
   }
   if (d.stale) {

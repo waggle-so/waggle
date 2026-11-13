@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { EventBus } from "../src/events";
 import { getGuide, guideTopics } from "../src/guide";
 import { projectGuide } from "../src/guide/project";
+import { CORRECTION_TRIGGER_COUNT, GUIDE_CORRECTION_COUNT } from "../src/projects";
 import { buildMcpTools, KNOCK_ASK_DESCRIPTION } from "../src/protocol/mcp";
 import type { KnockAskInput } from "../src/protocol";
 import { startRpcServer, type RpcServer } from "../src/server";
@@ -263,5 +264,95 @@ describe("project RPCs", () => {
     } finally {
       raw.close();
     }
+  });
+});
+
+// WAG-417: the learning trigger. 5 new corrections make the project guide ask for rules.
+describe("corrections trigger", () => {
+  function fixDecisions(store: Store, task: { id: string }, n: number, choice: string, tag = "Q") {
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const c = store.createCase(task.id, ask(`${tag}${i}?`)).id;
+      decide(store, c, { choice });
+      ids.push(c);
+    }
+    return ids;
+  }
+  const guideOf = (store: Store) =>
+    projectGuide({
+      project: "waggle",
+      decisions: [],
+      themes: [],
+      repoRecords: false,
+      stale: false,
+      comments: [],
+      correctionsDue: store.projects.correctionsDue("waggle"),
+      corrections: store.projects.correctedAsks("waggle"),
+    });
+
+  test("the constant is 5; no trigger at 4, trigger at 5", () => {
+    const { store, task } = setup();
+    expect(CORRECTION_TRIGGER_COUNT).toBe(5);
+    fixDecisions(store, task, 4, "b");
+    expect(store.projects.newCorrectionCount("waggle")).toBe(4);
+    expect(guideOf(store)).not.toContain("Propose rules from the corrections");
+    fixDecisions(store, task, 1, "b", "Extra");
+    expect(store.projects.correctionsDue("waggle")).toBe(true);
+    const text = guideOf(store);
+    expect(text).toContain("Propose rules from the corrections");
+    expect(text).toContain("case_ids");
+    expect(text).toContain("WRONG:");
+  });
+
+  test("accepted recommendations are not corrections", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 6, "a");
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+  });
+
+  test("another project does not count", () => {
+    const { store } = setup();
+    const other = store.createTask({ name: "other", project: "elsewhere" });
+    fixDecisions(store, other, 6, "b");
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+  });
+
+  test("the list: newest first, question, recommendation and what the person did", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 4, "b");
+    const c = store.createCase(task.id, ask("Last one?")).id;
+    decide(store, c, { choice: "b", message: "Too busy" });
+    const list = store.projects.correctedAsks("waggle");
+    expect(list).toHaveLength(5);
+    expect(list[0]).toMatchObject({ case_id: c, question: "Last one?", recommended: "Compact" });
+    expect(list[0]!.outcome).toBe("picked Detailed; wrote: Too busy");
+    expect(list[4]!.question).toBe("Q0?");
+    const text = guideOf(store);
+    expect(text).toContain(`1. [${c}] Last one? You recommended: Compact. The person: picked Detailed; wrote: Too busy.`);
+  });
+
+  test("the list holds 20 asks at most", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 25, "b");
+    const list = store.projects.correctedAsks("waggle");
+    expect(list).toHaveLength(GUIDE_CORRECTION_COUNT);
+    expect(list[0]!.question).toBe("Q24?");
+    expect(store.projects.newCorrectionCount("waggle")).toBe(25);
+  });
+
+  test("a proposal restarts the counter", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 5, "b");
+    expect(store.projects.correctionsDue("waggle")).toBe(true);
+    store.projects.propose("waggle", "sess-1", [{ text: "T", evidence_count: 1, quotes: [] }], new Date(Date.now() + 1000).toISOString());
+    expect(store.projects.newCorrectionCount("waggle")).toBe(0);
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+    expect(store.projects.correctedAsks("waggle")).toHaveLength(0);
+  });
+
+  test("the comment trigger still works on its own", () => {
+    const text = projectGuide({ project: "waggle", decisions: [], themes: [], repoRecords: false, stale: true, comments: ["Use plain words"] } as never);
+    expect(text).toContain("Propose themes");
+    expect(text).not.toContain("Propose rules from the corrections");
   });
 });

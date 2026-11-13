@@ -659,6 +659,7 @@ export function startRpcServer(opts: {
             if (project === null) return { text: getGuide(topic) };
             const prefs = store.projects.prefs(project);
             const stale = store.projects.themesStale(project);
+            const correctionsDue = store.projects.correctionsDue(project);
             return {
               text: projectGuide({
                 project,
@@ -667,6 +668,8 @@ export function startRpcServer(opts: {
                 repoRecords: prefs.repo_records,
                 stale,
                 comments: stale ? store.projects.recentComments(project, GUIDE_COMMENT_COUNT) : [],
+                correctionsDue,
+                corrections: correctionsDue ? store.projects.correctedAsks(project) : [],
               }),
             };
           }
