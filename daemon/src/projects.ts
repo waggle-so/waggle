@@ -46,6 +46,13 @@ export interface Theme {
   updated_at: string;
 }
 
+// One evidence line of a preference: the question of a stored case and what the person did.
+export interface PreferenceEvidence {
+  case_id: string;
+  question: string;
+  did: string;
+}
+
 export interface ThemeInput {
   text: string;
   evidence_count: number;
@@ -247,6 +254,129 @@ export class ProjectLog {
       all: this.allThemes().filter((t) => t.enabled).map((t) => t.text),
       project: project === null ? [] : this.themes(project).filter((t) => t.enabled).map((t) => t.text),
     };
+  }
+
+  // Every preference, for the Settings list: scope all first, then project rules grouped by project
+  // name (case-insensitive), oldest first inside a group.
+  allPreferences(): Theme[] {
+    const rows = this.db
+      .query(
+        `SELECT * FROM preferences
+         ORDER BY (scope = 'all') DESC, project COLLATE NOCASE, created_at, rowid`,
+      )
+      .all() as ThemeRow[];
+    return rows.map(toTheme);
+  }
+
+  // Every project name the daemon knows: the tasks' tags and the projects that hold a rule.
+  projectNames(): string[] {
+    const rows = this.db
+      .query(
+        `SELECT project FROM (
+           SELECT project FROM tasks WHERE project IS NOT NULL AND TRIM(project) <> ''
+           UNION SELECT project FROM preferences WHERE project IS NOT NULL)
+         ORDER BY project COLLATE NOCASE`,
+      )
+      .all() as { project: string }[];
+    return rows.map((r) => r.project);
+  }
+
+  // The evidence lines of one preference, in the order of its stored case ids. A case that is gone is
+  // left out. `did` is empty when the case has no deciding reply. `project` is the project that most
+  // of the cases belong to (else the only project there is, else null): the target of "Only this project".
+  evidence(id: string): { items: PreferenceEvidence[]; project: string | null } | null {
+    const theme = this.theme(id);
+    if (!theme) return null;
+    const items: PreferenceEvidence[] = [];
+    const counts = new Map<string, number>();
+    for (const caseId of theme.case_ids) {
+      const row = this.db
+        .query(
+          `SELECT c.title, c.options_json, c.recommendation_why, t.project AS project,
+                  r.id AS reply_id, r.choice, r.choices_json, r.message,
+                  (SELECT seq FROM reply_option_sets WHERE reply_id = r.id) AS seq
+           FROM cases c
+           JOIN tasks t ON t.id = c.task_id
+           LEFT JOIN replies r ON r.id = (
+             SELECT id FROM replies
+             WHERE case_id = c.id AND intent = 'decision' AND state NOT IN ('failed', 'superseded')
+               AND (choice IS NOT NULL OR choices_json IS NOT NULL OR (message IS NOT NULL AND TRIM(message) <> ''))
+             ORDER BY created_at DESC, rowid DESC LIMIT 1)
+           WHERE c.id = ?`,
+        )
+        .get(caseId) as {
+        title: string;
+        options_json: string;
+        recommendation_why: string;
+        project: string | null;
+        reply_id: string | null;
+        choice: string | null;
+        choices_json: string | null;
+        message: string | null;
+        seq: number | null;
+      } | null;
+      if (!row) continue;
+      if (row.project) counts.set(row.project, (counts.get(row.project) ?? 0) + 1);
+      let did = "";
+      if (row.reply_id !== null) {
+        const set = this.optionSet(caseId, row.seq, row.options_json, row.recommendation_why);
+        const ids = row.choices_json !== null ? (JSON.parse(row.choices_json) as string[]) : row.choice ? [row.choice] : [];
+        const names = ids.map((x) => {
+          const o = set.options.find((y) => y.id === x);
+          return o ? (o.title ?? o.label) : x;
+        });
+        const note = clip(row.message ?? "", 120);
+        if (row.choice === "request_changes") did = note !== "" ? `Asked for changes: ${note}` : "Asked for changes.";
+        else if (names.length > 0) did = note !== "" ? `Picked ${names.join(", ")}. ${note}` : `Picked ${names.join(", ")}.`;
+        else if (note !== "") did = `Wrote: ${note}`;
+      }
+      items.push({ case_id: caseId, question: row.title, did });
+    }
+    let project: string | null = null;
+    let best = 0;
+    for (const [name, n] of counts) if (n > best || (n === best && project !== null && name < project)) [project, best] = [name, n];
+    if (project === null) {
+      const names = this.projectNames();
+      if (names.length === 1) project = names[0]!;
+    }
+    return { items, project };
+  }
+
+  // A rule written by hand. Scope all unless a project is given. A rule with the same text in that
+  // scope is turned on instead of copied.
+  addPreference(text: string, project: string | null, now = new Date().toISOString()): Theme {
+    const clean = clip(text, MAX_THEME_TEXT);
+    if (clean === "") throw new Error("empty rule");
+    const scope: PreferenceScope = project === null ? "all" : "project";
+    const existing = (scope === "all" ? this.allThemes() : this.themes(project!)).find((t) => sameTheme(t.text, clean));
+    if (existing) {
+      this.db.query(`UPDATE preferences SET enabled = 1, updated_at = ? WHERE id = ?`).run(now, existing.id);
+      return this.theme(existing.id)!;
+    }
+    const id = `th_${randomUUID().slice(0, 8)}`;
+    this.db
+      .query(
+        `INSERT INTO preferences (id, scope, project, text, evidence_count, quotes_json, case_ids_json, enabled, proposed_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, '[]', '[]', 1, NULL, ?, ?)`,
+      )
+      .run(id, scope, project, clean, now, now);
+    return this.theme(id)!;
+  }
+
+  // Changes the text of a rule. Evidence, quotes and on/off stay.
+  setThemeText(id: string, text: string): Theme | null {
+    const clean = clip(text, MAX_THEME_TEXT);
+    if (clean === "") throw new Error("empty rule");
+    this.db.query(`UPDATE preferences SET text = ?, updated_at = ? WHERE id = ?`).run(clean, new Date().toISOString(), id);
+    return this.theme(id);
+  }
+
+  // Moves a rule to scope all (project null) or to one project. Everything else stays.
+  setThemeScope(id: string, project: string | null): Theme | null {
+    this.db
+      .query(`UPDATE preferences SET scope = ?, project = ?, updated_at = ? WHERE id = ?`)
+      .run(project === null ? "all" : "project", project, new Date().toISOString(), id);
+    return this.theme(id);
   }
 
   // Adds new themes and merges the ones whose text matches an existing theme. A merge raises the

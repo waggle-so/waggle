@@ -1096,13 +1096,36 @@ export const ProjectDecisionsParams = z.object({
 export const ProjectDecisionsResult = z.object({ items: z.array(ProjectDecision), total: z.number().int() });
 export const ProjectGetParams = z.object({ project: z.string() });
 // preference.list: the preferences of one scope. Scope project needs the project name.
-export const PreferenceListParams = z.object({ scope: PreferenceScope, project: z.string().optional() });
+// With no scope it lists every preference (scope all first, then project rules grouped by project) and
+// adds the known project names: the Settings list reads that.
+export const PreferenceListParams = z.object({ scope: PreferenceScope.optional(), project: z.string().optional() });
 export type PreferenceListParams = z.infer<typeof PreferenceListParams>;
 // preference.rules: the rule text for the connect text of a session. Text only.
 export const PreferenceRulesParams = z.object({ session_id: z.string() });
 export type PreferenceRulesParams = z.infer<typeof PreferenceRulesParams>;
 export const PreferenceRulesResult = z.object({ all: z.array(z.string()), project: z.array(z.string()) });
 export type PreferenceRulesResult = z.infer<typeof PreferenceRulesResult>;
+// preference.evidence: the evidence lines of one rule (the case question and what the person did).
+export const PreferenceEvidenceParams = z.object({ id: z.string() });
+export type PreferenceEvidenceParams = z.infer<typeof PreferenceEvidenceParams>;
+export const PreferenceEvidenceResult = z.object({
+  items: z.array(z.object({ case_id: z.string(), question: z.string(), did: z.string() })),
+  project: z.string().nullable(),
+});
+export type PreferenceEvidenceResult = z.infer<typeof PreferenceEvidenceResult>;
+// preference.add: a rule written by hand. Scope all unless a project is given.
+export const PreferenceAddParams = z.object({ text: z.string().trim().min(1), project: z.string().trim().min(1).optional() });
+export type PreferenceAddParams = z.infer<typeof PreferenceAddParams>;
+// preference.update: the new text of a rule.
+export const PreferenceUpdateParams = z.object({ id: z.string(), text: z.string().trim().min(1) });
+export type PreferenceUpdateParams = z.infer<typeof PreferenceUpdateParams>;
+// preference.set_scope: a rule for every project (scope all) or for one project (scope project needs it).
+export const PreferenceSetScopeParams = z.object({
+  id: z.string(),
+  scope: PreferenceScope,
+  project: z.string().trim().min(1).optional(),
+});
+export type PreferenceSetScopeParams = z.infer<typeof PreferenceSetScopeParams>;
 export const ProjectThemeToggleParams = z.object({ id: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsParams = z.object({ project: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsResult = z.object({ project: z.string(), repo_records: z.boolean() });

@@ -169,3 +169,87 @@ describe("connect block", () => {
     expect(text).toContain("## Operator preferences · asks\n\nMy ask text\n\n## How this person decides\n\n- R");
   });
 });
+
+// WAG-419: the Settings list, the evidence lines and the edit RPCs.
+describe("settings list and edit", () => {
+  function seeded() {
+    const s = store();
+    const t1 = s.createTask({ name: "w", project: "Waggle" });
+    const t2 = s.createTask({ name: "x", project: "website" });
+    const ask = (title: string) =>
+      ({
+        kind: "question", title, need: title, why: "Needed", recommendation: "a", recommendation_why: "Default",
+        options: [{ id: "a", label: "Compact layout", title: "Compact" }, { id: "b", label: "Other layout", title: "Other" }],
+      }) as never;
+    const c1 = s.createCase(t1.id, ask("Layout?")).id;
+    const c2 = s.createCase(t1.id, ask("Spacing?")).id;
+    const c3 = s.createCase(t2.id, ask("Hero?")).id;
+    return { s, c1, c2, c3 };
+  }
+
+  test("allPreferences: scope all first, then projects by name, oldest first", () => {
+    const { s } = seeded();
+    s.projects.propose("website", null, [{ text: "W one", evidence_count: 1, quotes: [] }], "2026-01-01T00:00:00.000Z");
+    s.projects.propose("Waggle", null, [{ text: "G two", evidence_count: 1, quotes: [] }], "2026-01-02T00:00:00.000Z");
+    s.projects.propose("Waggle", null, [{ text: "G one", evidence_count: 1, quotes: [] }], "2026-01-03T00:00:00.000Z");
+    s.projects.propose("Waggle", null, [{ text: "Every one", evidence_count: 1, quotes: [], scope: "all" }], "2026-01-04T00:00:00.000Z");
+    expect(s.projects.allPreferences().map((t) => t.text)).toEqual(["Every one", "G two", "G one", "W one"]);
+    expect(s.projects.projectNames()).toEqual(["Waggle", "website"]);
+  });
+
+  test("evidence: question and what the person did, project of the cases", () => {
+    const { s, c1, c2, c3 } = seeded();
+    let k = 0;
+    const reply = (caseId: string, extra: Record<string, unknown>) =>
+      s.submitReply(caseId, { idempotency_key: `k${k++}`, intent: "decision", comments: [], captures: [], ...extra } as never);
+    reply(c1, { choice: "b" });
+    reply(c2, { message: "Tighter please" });
+    const [theme] = s.projects.propose("Waggle", null, [
+      { text: "Tight rows", evidence_count: 3, quotes: [], case_ids: [c1, c2, c3, "gone"], scope: "all" },
+    ]).added;
+    const ev = s.projects.evidence(theme!.id)!;
+    expect(ev.items.map((i) => i.question)).toEqual(["Layout?", "Spacing?", "Hero?"]);
+    expect(ev.items[0]!.did).toBe("Picked Other.");
+    expect(ev.items[1]!.did).toBe("Wrote: Tighter please");
+    expect(ev.items[2]!.did).toBe("");
+    expect(ev.project).toBe("Waggle");
+    expect(s.projects.evidence("nope")).toBeNull();
+  });
+
+  test("evidence project falls back to the only project, else null", () => {
+    const s = store();
+    s.createTask({ name: "w", project: "solo" });
+    const hand = s.projects.addPreference("By hand", null);
+    expect(s.projects.evidence(hand.id)!.project).toBe("solo");
+    s.createTask({ name: "x", project: "two" });
+    expect(s.projects.evidence(hand.id)!.project).toBeNull();
+  });
+
+  test("add: scope all unless a project is given; same text turns the rule on", () => {
+    const s = store();
+    const a = s.projects.addPreference("  Keep   it short ", null);
+    expect(a).toMatchObject({ scope: "all", text: "Keep it short", evidence_count: 0, case_ids: [], enabled: true });
+    const p = s.projects.addPreference("Keep it short", "waggle");
+    expect(p).toMatchObject({ scope: "project" });
+    expect(p.id).not.toBe(a.id);
+    s.projects.setThemeEnabled(a.id, false);
+    const again = s.projects.addPreference("keep it short", null);
+    expect(again.id).toBe(a.id);
+    expect(again.enabled).toBe(true);
+    expect(() => s.projects.addPreference("   ", null)).toThrow();
+  });
+
+  test("update text and set scope keep evidence and on/off", () => {
+    const s = store();
+    const [t] = s.projects.propose("waggle", null, [{ text: "Old", evidence_count: 4, quotes: ["q"], case_ids: ["c1"] }]).added;
+    s.projects.setThemeEnabled(t!.id, false);
+    const u = s.projects.setThemeText(t!.id, " New words ")!;
+    expect(u).toMatchObject({ text: "New words", evidence_count: 4, quotes: ["q"], case_ids: ["c1"], enabled: false });
+    const all = s.projects.setThemeScope(t!.id, null)!;
+    expect(all).toMatchObject({ scope: "all", enabled: false, evidence_count: 4 });
+    expect(s.projects.setThemeScope(t!.id, "other")).toMatchObject({ scope: "project" });
+    expect(s.projects.themes("other").map((x) => x.id)).toEqual([t!.id]);
+    expect(s.projects.setThemeText("nope", "x")).toBeNull();
+    expect(() => s.projects.setThemeText(t!.id, "  ")).toThrow();
+  });
+});
