@@ -599,7 +599,12 @@ export type SessionHelloResult = z.infer<typeof SessionHelloResult>;
 // KnockAskInput, so the agent never sees it in the tool schema.
 export const CaseCreateParams = z.intersection(
   KnockAskInput,
-  z.object({ client_request_id: z.string().min(8).max(100).optional() }),
+  z.object({
+    client_request_id: z.string().min(8).max(100).optional(),
+    // WAG-416: the shim says it can show a hold (below). Without it the daemon never holds an ask, so an older
+    // shim keeps working against this daemon. Not part of the agent's tool schema.
+    accepts_hold: z.boolean().optional(),
+  }),
 );
 export type CaseCreateParams = z.infer<typeof CaseCreateParams>;
 export const CaseCreateResult = Case.extend({
@@ -607,6 +612,23 @@ export const CaseCreateResult = Case.extend({
   words_warning: z.string().nullable(),
 });
 export type CaseCreateResult = z.infer<typeof CaseCreateResult>;
+
+// WAG-416: the other answer of case.create. A decision ask that fits past decisions of its project is held once:
+// no case is created. `matches` holds up to 3 strong matches, best first. The same ask sent again (same session and
+// title, within 15 minutes) creates the case, and the case stores these ids as `matched_case_ids`.
+export const DecidedMatch = z.object({
+  case_id: z.string(),
+  question: z.string(),
+  pick: z.string(),
+  why: z.string(),
+  date: z.string(),
+});
+export type DecidedMatch = z.infer<typeof DecidedMatch>;
+export const CaseHoldResult = z.object({
+  held: z.literal(true),
+  matches: z.array(DecidedMatch).min(1).max(3),
+});
+export type CaseHoldResult = z.infer<typeof CaseHoldResult>;
 
 // case.wait: same wait and return shape as waggle_ask / waggle_check. The reply
 // payload carries its reply_id so the shim can acknowledge it afterwards.

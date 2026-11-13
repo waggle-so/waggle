@@ -127,6 +127,7 @@ import {
 } from "./protocol/items";
 import { POINT_DEFAULT_CHOICES, pointOptionLabel } from "./protocol/nouns";
 import { DesignKit, EMPTY_DESIGN_KIT, type DesignKitChange } from "./protocol/design-kit";
+import { type DecidedMatch, reindexDecidedCase, searchDecidedAsks } from "./decided-index";
 import { noteBucket, replyOutcome, UsageLogger } from "./usage";
 import type { ToolCallLog } from "./usage/tools";
 
@@ -326,6 +327,7 @@ export class Store {
     runtime: Runtime = "claude",
     request?: { sessionId: string; clientRequestId: string },
     session?: { id: string; cwd: string },
+    matchedCaseIds: readonly string[] = [],
   ): Case & { replaced_answer_note: string | null; words_warning: string | null } {
     // WAG-354: a marker that names no cited source is removed from the text before anything is stored.
     const markers: MarkerReport = { count: 0, unknown: [], cited: [] };
@@ -470,6 +472,9 @@ export class Store {
             .query(`UPDATE cases SET auto_category = ?, auto_rule = ?, auto_choice = ?, auto_answer = ?, auto_at = ? WHERE id = ?`)
             .run(auto.category, auto.rule, auto.choice, auto.answer, now, id);
         }
+        if (matchedCaseIds.length > 0) {
+          this.db.query(`UPDATE cases SET matched_case_ids_json = ? WHERE id = ?`).run(JSON.stringify(matchedCaseIds), id);
+        }
         events.push(this.appendEvent(auto !== null ? "case.updated" : "case.created", { case_id: id }));
         staged.forEach((artifact, i) => {
           events.push(this.insertRevisionRow(id, artifact, i + 1, ask.artifacts[i]?.name).event);
@@ -500,6 +505,7 @@ export class Store {
               `UPDATE cases SET status = 'resolved', withdrawn_at = ?, updated_at = ? WHERE id = ?`,
             )
             .run(now, now, input.replaces);
+          reindexDecidedCase(this.db, input.replaces);
           events.push(this.appendEvent("case.updated", { case_id: input.replaces }));
         }
       })();
@@ -578,6 +584,7 @@ export class Store {
       updated_at: now,
       ...(ask.stage !== undefined ? { plan: { stage: ask.stage, rounds: 1, answered: 0, ...(lastStaged !== null ? { artifact_kind: lastStaged.kind } : {}) } } : {}),
       ...(auto !== null ? { auto_decided: { ...auto, at: now } } : {}),
+      matched_case_ids: [...matchedCaseIds],
       replaced_answer_note: replacedAnswerNote,
       words_warning: wordsWarningText,
     };
@@ -614,6 +621,31 @@ export class Store {
       if (pending !== null) return null;
     }
     return { category, rule: AUTO_RULE_IDS[category], choice: picked.id, answer: picked.title ?? picked.label };
+  }
+
+  // WAG-416: the project of a task, the strong past decisions of that project that fit an ask, and whether the
+  // Ask less rules would decide the ask at once (a rule-decided ask is never held).
+  taskProject(taskId: string): string {
+    return this.taskRowById(taskId)?.project ?? "";
+  }
+  searchDecided(project: string, ask: KnockAskInput): DecidedMatch[] {
+    const ask2 = normalizeAsk(ask);
+    return searchDecidedAsks(this.db, project, {
+      title: ask.title,
+      need: ask2.need,
+      optionLabels: ask2.items.flatMap((item) => item.options.map((o) => o.label)),
+    });
+  }
+  // The coded usage events of the check (no text): a hold with its match count, and a failed search.
+  recordAskCheck(event: "ask_held" | "ask_check_failed", n?: number): void {
+    this.usage?.record({ event, ...(n !== undefined ? { n, kind: "question" as const } : {}) });
+  }
+  askKindOf(ask: KnockAskInput): "question" | "review" {
+    return normalizeAsk(ask).kind;
+  }
+  wouldAutoDecide(ask: KnockAskInput): boolean {
+    const normalized = normalizeAsk(ask);
+    return this.autoDecision(ask, normalized, normalized.kind) !== null;
   }
 
   // WAG-412: the cases a rule decided since `since`, newest first, that the person has not changed (a reply makes
@@ -2300,6 +2332,7 @@ export class Store {
     this.db
       .query(`UPDATE cases SET status = 'waiting_on_agent', updated_at = ? WHERE id = ?`)
       .run(now, caseId);
+    reindexDecidedCase(this.db, caseId);
     events.push(this.appendEvent("reply.state_changed", { reply_id: id, case_id: caseId }));
     events.push(this.appendEvent("case.updated", { case_id: caseId }));
     return { replyId: id, events, incomingDirs };
@@ -2464,6 +2497,7 @@ export class Store {
           .query(`UPDATE replies SET attachments_json = ? WHERE id = ?`)
           .run(ingested.records.length > 0 ? JSON.stringify(ingested.records) : null, replyId);
       }
+      reindexDecidedCase(this.db, row.case_id);
       event = this.appendEvent("reply.state_changed", { reply_id: replyId, case_id: row.case_id });
     })();
     removeIncomingDirs(incomingDirs, this.dataRoot);
@@ -3677,6 +3711,7 @@ interface CaseRow {
   auto_choice?: string | null;
   auto_answer?: string | null;
   auto_at?: string | null;
+  matched_case_ids_json?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -4129,6 +4164,7 @@ function rowToCase(row: CaseRow): Case {
     session_ended_at: row.session_ended_at ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    matched_case_ids: JSON.parse(row.matched_case_ids_json ?? "[]") as string[],
     ...(row.auto_at != null && AskCategory.safeParse(row.auto_category).success
       ? {
           auto_decided: {
