@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import { backfillCorrections } from "./corrections";
+import { backfillDecidedAsks, DECIDED_TABLE_SQL } from "./decided-index";
 
 // Versioned migrations (docs/protocol-mvp.md, KNOCK-02 acceptance: "Migrations
 // are versioned"). The applied version lives in PRAGMA user_version. Never edit
@@ -1512,7 +1514,153 @@ CREATE INDEX idx_usage_ask ON usage(ask_h);
     // Additive. An older daemon ignores the index, so a rollback is safe.
     sql: `CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, type, at);`,
   },
+  {
+    version: 59,
+    // Brain corrections (WAG-414). replies.correction is 1 when the person did not just accept the agent's
+    // proposal (src/corrections.ts), 0 for a reply that decided without one, null for a reply that did not decide. cases.mind_changed_at marks a case the person took back from a rule
+    // ("Change my mind"), so its later reply counts as a correction. usage is recreated for the coded event
+    // `correction` (SQLite cannot alter a CHECK in place); its rows and indexes are kept. The old replies get
+    // the flag from the data they kept; a "Change my mind" of the past is not in the data and stays 0.
+    sql: "",
+    up: (db) => {
+      db.exec(USAGE_WITH_CORRECTION_SQL);
+      // Guarded like the migrations above: a test rewinds user_version and runs them again. The backfill runs
+      // only when this run adds the column, so a re-run never overwrites a stored flag.
+      const has = (table: string, name: string): boolean =>
+        (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === name);
+      if (!has("cases", "mind_changed_at")) db.exec(`ALTER TABLE cases ADD COLUMN mind_changed_at TEXT`);
+      if (!has("replies", "correction")) {
+        db.exec(`ALTER TABLE replies ADD COLUMN correction INTEGER CHECK (correction IN (0, 1))`);
+        backfillCorrections(db);
+      }
+    },
+  },
+  {
+    version: 60,
+    // WAG-415 (Waggle Brain): preferences with a scope. A project_themes row becomes a preference with
+    // scope 'project', with the same id, text, evidence count, quotes, on/off state and proposer. A
+    // preference with scope 'all' has project NULL. case_ids_json holds the evidence cases (the app
+    // shows them; the connect text never does). Versions 59 and 61 belong to parallel work.
+    // Safe to run again: several tests replay the migrations over a full schema.
+    sql: "",
+    up: (db) => {
+      db.exec(`
+CREATE TABLE IF NOT EXISTS preferences (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL CHECK (scope IN ('project', 'all')),
+  project TEXT,
+  text TEXT NOT NULL,
+  evidence_count INTEGER NOT NULL DEFAULT 0,
+  quotes_json TEXT NOT NULL DEFAULT '[]',
+  case_ids_json TEXT NOT NULL DEFAULT '[]',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  proposed_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK ((scope = 'project') = (project IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_preferences_project ON preferences(project);
+CREATE INDEX IF NOT EXISTS idx_preferences_scope ON preferences(scope);`);
+      const old = db.query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'project_themes'`).get();
+      if (old) {
+        db.exec(`
+INSERT OR IGNORE INTO preferences (id, scope, project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at)
+  SELECT id, 'project', project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at
+  FROM project_themes ORDER BY rowid;
+DROP TABLE project_themes;`);
+      }
+    },
+  },
+  {
+    version: 61,
+    // The Brain's recall (WAG-416). Three changes:
+    // 1. decided_asks: a full-text index of the decided asks, filled here from the old cases.
+    // 2. cases.matched_case_ids_json: the past decisions that fit an ask, stored on the case that was created after them.
+    // 3. usage takes two events, ask_held and ask_check_failed. SQLite cannot alter a CHECK in place, so usage is
+    //    rebuilt from its own stored definition (every column and index stays, whatever other migrations added).
+    sql: ``,
+    up: (db) => {
+      db.exec(DECIDED_TABLE_SQL);
+      const has = (table: string, column: string) =>
+        (db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+      if (!has("cases", "matched_case_ids_json")) db.exec(`ALTER TABLE cases ADD COLUMN matched_case_ids_json TEXT`);
+      const usage = db.query(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usage'`).get() as { sql: string } | null;
+      if (usage && !usage.sql.includes("'ask_held'")) {
+        const rebuilt = usage.sql
+          .replace(/CREATE TABLE\s+"?usage"?/, "CREATE TABLE usage_new")
+          .replace("'compare_toggled'", "'compare_toggled', 'ask_held', 'ask_check_failed'");
+        if (!rebuilt.includes("'ask_held'") || !rebuilt.includes("usage_new")) throw new Error("migration 61: cannot rebuild usage");
+        const indexes = db
+          .query(`SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage' AND sql IS NOT NULL`)
+          .all() as { sql: string }[];
+        const columns = (db.query(`PRAGMA table_info(usage)`).all() as { name: string }[]).map((c) => c.name).join(", ");
+        db.exec(rebuilt);
+        db.exec(`INSERT INTO usage_new (${columns}) SELECT ${columns} FROM usage`);
+        db.exec(`DROP TABLE usage`);
+        db.exec(`ALTER TABLE usage_new RENAME TO usage`);
+        for (const index of indexes) db.exec(index.sql);
+      }
+      backfillDecidedAsks(db);
+    },
+  },
 ];
+
+const USAGE_WITH_CORRECTION_SQL = `
+CREATE TABLE usage_new (
+  event TEXT NOT NULL CHECK (event IN (
+    'ask_created', 'reply_submitted', 'revision_added', 'reply_delivered', 'reply_failed',
+    'reply_retried', 'ask_pending_timeout', 'session_started', 'case_opened',
+    'comment_mode_started', 'artifact_opened_full', 'review_opened', 'preview_interacted',
+    'option_picked', 'recommendation_accepted', 'reply_typed', 'ask_more_detail_opened',
+    'change_answer_started', 'go_back_clicked', 'sessions_panel_opened',
+    'session_detail_opened', 'screenshot_zoom_changed', 'screenshot_set_view_opened',
+    'comment_added', 'nudge_clicked', 'copy_prompt_clicked', 'ask_dismissed', 'ask_restored',
+    'round_added', 'app_launched', 'app_active', 'onboarding_started',
+    'onboarding_agent_connected', 'onboarding_continued', 'first_job_started',
+    'first_job_finished', 'onboarding_prompt_copied', 'tour_started', 'tour_finished',
+    'tour_skipped', 'getting_started_line_opened', 'getting_started_hidden',
+    'settings_page_opened', 'usage_exported', 'new_idea_opened', 'new_idea_started',
+    'launch_target_chosen', 'project_page_opened', 'update_prompt_shown',
+    'update_install_clicked', 'update_later_clicked', 'update_skipped',
+    'update_restart_clicked', 'whats_new_opened', 'split_fold_toggled', 'sources_list_opened',
+    'source_opened', 'artifact_variant_selected', 'detail_format_picked', 'quick_reply_picked',
+    'ask_auto_decided', 'compare_toggled', 'correction'
+  )),
+  hour TEXT NOT NULL,
+  n INTEGER,
+  duration_s INTEGER,
+  kind TEXT CHECK (kind IN ('question', 'review')),
+  artifact_kind TEXT CHECK (artifact_kind IN ('screenshot', 'html_bundle', 'markdown', 'screenshots', 'diagram')),
+  outcome TEXT CHECK (outcome IN ('took_recommendation', 'other_option', 'message_only')),
+  source TEXT CHECK (source IN (
+    'notification', 'menu_bar', 'queue', 'sessions_panel', 'auto_advance',
+    'keyboard', 'click', 'number_key', 'button', 'shortcut', 'mac', 'telegram', 'slack'
+  )),
+  project_h TEXT,
+  after_s TEXT CHECK (after_s IN ('0-2', '3-10', '11-60', '60+')),
+  variant TEXT CHECK (variant IN (
+    'fit', '100', 'zoom', 'point', 'region', 'agents', 'notifications', 'previews',
+    'artifacts', 'asks', 'phone', 'updates', 'data', 'help', 'claudeTerminal', 'codexTerminal',
+    'claudeApp', 'codexApp', 'claudeSuperset', 'codexSuperset', 'conductor', 'claudeT3',
+    'codexT3', 'session', 'queue', 'ask', 'both', 'connect', 'job', 'decision', 'talk',
+    'design_kit', 'claude', 'codex', 'tradeoffs', 'prototype', 'numbers', 'example', 'something_else', 'screenshots', 'how_it_works',
+    'lets_discuss', 'my_comments', 'show_more', 'on', 'off'
+  )),
+  ask_h TEXT,
+  intent TEXT CHECK (intent IN ('decision', 'more_detail', 'discuss')),
+  format TEXT CHECK (format IN ('eli5', 'diagram', 'page', 'none')),
+  stage TEXT CHECK (stage IN ('questions', 'approaches', 'design', 'spec')),
+  note TEXT CHECK (note IN ('none', '1-20', '21-100', '101-400', '400+')),
+  category TEXT CHECK (category IN ('naming', 'wording', 'formatting', 'tests')),
+  rule_id TEXT CHECK (rule_id IN ('ask_less_naming', 'ask_less_wording', 'ask_less_formatting', 'ask_less_tests'))
+);
+INSERT INTO usage_new (event, hour, n, duration_s, kind, artifact_kind, outcome, source, project_h, after_s, variant, ask_h, intent, format, stage, note, category, rule_id)
+  SELECT event, hour, n, duration_s, kind, artifact_kind, outcome, source, project_h, after_s, variant, ask_h, intent, format, stage, note, category, rule_id FROM usage;
+DROP TABLE usage;
+ALTER TABLE usage_new RENAME TO usage;
+CREATE INDEX idx_usage_hour ON usage(hour);
+CREATE INDEX idx_usage_ask ON usage(ask_h);
+`;
 
 export function migrate(db: Database): void {
   const row = db.query("PRAGMA user_version").get() as { user_version: number };
