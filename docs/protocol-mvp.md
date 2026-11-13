@@ -2490,8 +2490,18 @@ leaves it out: that daemon ignores all five. Unit tests pass fakes to the connec
 
 A project is the `tasks.project` tag. Migration 35 adds `project_themes` and `project_prefs`.
 
+Preferences (WAG-415, migration 60): migration 35 added `project_themes`. Migration 60 moves every row to the `preferences` table
+with scope `project` (same id, text, evidence count, quotes, on/off state and proposer) and drops `project_themes`. A preference
+has a scope: `project` (it has a project) or `all` (project NULL, it belongs to no project). `case_ids_json` and the quotes are
+evidence for the app only. `project.get` returns the `project` scope preferences, each with `scope` and `case_ids`.
+
+- `preference.list { scope: "project" | "all", project? }`: `{ items }`. Scope `project` needs `project`.
+- `preference.rules { session_id }`: `{ all: string[], project: string[] }`, the rule text of the preferences that are on. `project` holds the session's project only. The shim calls it at connect.
+- `project.theme_toggle { id, enabled }` works on a preference of either scope.
+- The connect text (`instructionsFor`) adds the block `## How this person decides` after the ask preferences. It lists the rules that are on, scope `all` first, then this project's. At most 30 lines in all (title and blank line included); the project rules are cut first. Rule text only: never evidence, quotes or case ids. With no rules there is no block. A session in project X never gets a project rule of project Y.
+
 - `project.get { project }`: `decisions`, `comments`, `last_decision_at`, `repo_records`, `themes`.
 - `project.decisions { project, limit = 50, offset = 0 }`: `{ items, total }`, newest first. A case counts once, when its newest non-failed, non-superseded decision reply has a choice. Dismissed and withdrawn cases do not count. `why` is the reply note, else the `recommendation_why` of the option set the reply chose from.
 - `project.theme_toggle { id, enabled }` and `project.set_repo_records { project, enabled }`.
-- MCP `waggle_themes { action: "propose", themes: [{ text, evidence_count, quotes[≤3] }] }` (at most 8; alias `knock_themes`). The daemon merges by case-insensitive exact or prefix text and never turns an off theme on.
+- MCP `waggle_themes { action: "propose", themes: [{ text, evidence_count, quotes[≤3], case_ids?[≤10], scope?: "project" | "all" }] }` (at most 8; alias `knock_themes`). `scope` defaults to `project`. The daemon merges by case-insensitive exact or prefix text within the same scope and never turns an off theme on, for both scopes.
 - `waggle_guide` topic `project`: the last 10 decisions, the ON themes, the `docs/decisions/` instruction when the switch is on, and, when themes are stale (none proposed yet, or more than 20 new comments since), the last 50 comments. A comment is a pin on a reply or the note of a decision reply.

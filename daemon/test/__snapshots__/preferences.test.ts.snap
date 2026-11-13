@@ -1,0 +1,42 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`connect block with rules: all first, then the project 1`] = `
+"## How this person decides
+
+- Plain words.
+- Dark chrome.
+- Tight rows."
+`;
+
+exports[`connect block over 30 rules: at most 30 lines, all rules first, project rules cut 1`] = `
+"## How this person decides
+
+- All rule 0
+- All rule 1
+- All rule 2
+- All rule 3
+- All rule 4
+- Project rule 0
+- Project rule 1
+- Project rule 2
+- Project rule 3
+- Project rule 4
+- Project rule 5
+- Project rule 6
+- Project rule 7
+- Project rule 8
+- Project rule 9
+- Project rule 10
+- Project rule 11
+- Project rule 12
+- Project rule 13
+- Project rule 14
+- Project rule 15
+- Project rule 16
+- Project rule 17
+- Project rule 18
+- Project rule 19
+- Project rule 20
+- Project rule 21
+- Project rule 22"
+`;

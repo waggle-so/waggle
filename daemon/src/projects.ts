@@ -6,6 +6,7 @@ import type { Database } from "bun:sqlite";
 
 export const MAX_THEMES_PER_PROPOSAL = 8;
 export const MAX_QUOTES = 3;
+const MAX_CASE_IDS = 10;
 const MAX_THEME_TEXT = 200;
 const MAX_QUOTE_TEXT = 160;
 // More than this many new comments since the last proposal makes the themes stale.
@@ -29,11 +30,16 @@ export interface ProjectStats {
   last_decision_at: string | null;
 }
 
+export type PreferenceScope = "project" | "all";
+
 export interface Theme {
   id: string;
+  scope: PreferenceScope;
   text: string;
   evidence_count: number;
   quotes: string[];
+  // Evidence cases. Only the app reads them; the connect text never carries them.
+  case_ids: string[];
   enabled: boolean;
   proposed_by: string | null;
   created_at: string;
@@ -44,6 +50,8 @@ export interface ThemeInput {
   text: string;
   evidence_count: number;
   quotes: string[];
+  case_ids?: string[];
+  scope?: PreferenceScope;
 }
 
 export interface ProposeResult {
@@ -59,6 +67,8 @@ interface OptionRow {
 
 interface ThemeRow {
   id: string;
+  scope: PreferenceScope;
+  case_ids_json: string;
   text: string;
   evidence_count: number;
   quotes_json: string;
@@ -71,9 +81,11 @@ interface ThemeRow {
 function toTheme(row: ThemeRow): Theme {
   return {
     id: row.id,
+    scope: row.scope,
     text: row.text,
     evidence_count: row.evidence_count,
     quotes: JSON.parse(row.quotes_json) as string[],
+    case_ids: JSON.parse(row.case_ids_json) as string[],
     enabled: row.enabled === 1,
     proposed_by: row.proposed_by,
     created_at: row.created_at,
@@ -212,11 +224,29 @@ export class ProjectLog {
     return n > STALE_COMMENT_COUNT;
   }
 
+  // The preferences with scope project for one project.
   themes(project: string): Theme[] {
     const rows = this.db
-      .query(`SELECT * FROM project_themes WHERE project = ? ORDER BY created_at, rowid`)
+      .query(`SELECT * FROM preferences WHERE scope = 'project' AND project = ? ORDER BY created_at, rowid`)
       .all(project) as ThemeRow[];
     return rows.map(toTheme);
+  }
+
+  // The preferences with scope all. They belong to no project.
+  allThemes(): Theme[] {
+    const rows = this.db
+      .query(`SELECT * FROM preferences WHERE scope = 'all' ORDER BY created_at, rowid`)
+      .all() as ThemeRow[];
+    return rows.map(toTheme);
+  }
+
+  // Rule text of the preferences that are on, for the connect text: scope all first, then this
+  // project's. Text only: never evidence, quotes or case ids.
+  ruleTexts(project: string | null): { all: string[]; project: string[] } {
+    return {
+      all: this.allThemes().filter((t) => t.enabled).map((t) => t.text),
+      project: project === null ? [] : this.themes(project).filter((t) => t.enabled).map((t) => t.text),
+    };
   }
 
   // Adds new themes and merges the ones whose text matches an existing theme. A merge raises the
@@ -229,22 +259,43 @@ export class ProjectLog {
         const text = clip(input.text, MAX_THEME_TEXT);
         if (text === "") continue;
         const quotes = input.quotes.map((q) => clip(q, MAX_QUOTE_TEXT)).filter((q) => q !== "");
-        const existing = this.themes(project).find((t) => sameTheme(t.text, text));
+        const scope: PreferenceScope = input.scope ?? "project";
+        const caseIds = [...new Set(input.case_ids ?? [])].slice(0, MAX_CASE_IDS);
+        const existing = (scope === "all" ? this.allThemes() : this.themes(project)).find((t) => sameTheme(t.text, text));
         if (existing) {
           const all = [...existing.quotes];
           for (const q of quotes) if (!all.includes(q)) all.push(q);
+          const cases = [...existing.case_ids];
+          for (const c of caseIds) if (!cases.includes(c)) cases.push(c);
           this.db
-            .query(`UPDATE project_themes SET evidence_count = ?, quotes_json = ?, updated_at = ? WHERE id = ?`)
-            .run(Math.max(existing.evidence_count, input.evidence_count), JSON.stringify(all.slice(0, MAX_QUOTES)), now, existing.id);
+            .query(`UPDATE preferences SET evidence_count = ?, quotes_json = ?, case_ids_json = ?, updated_at = ? WHERE id = ?`)
+            .run(
+              Math.max(existing.evidence_count, input.evidence_count),
+              JSON.stringify(all.slice(0, MAX_QUOTES)),
+              JSON.stringify(cases.slice(0, MAX_CASE_IDS)),
+              now,
+              existing.id,
+            );
           merged.push(this.theme(existing.id)!);
         } else {
           const id = `th_${randomUUID().slice(0, 8)}`;
           this.db
             .query(
-              `INSERT INTO project_themes (id, project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+              `INSERT INTO preferences (id, scope, project, text, evidence_count, quotes_json, case_ids_json, enabled, proposed_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
             )
-            .run(id, project, text, input.evidence_count, JSON.stringify(quotes.slice(0, MAX_QUOTES)), sessionId, now, now);
+            .run(
+              id,
+              scope,
+              scope === "all" ? null : project,
+              text,
+              input.evidence_count,
+              JSON.stringify(quotes.slice(0, MAX_QUOTES)),
+              JSON.stringify(caseIds),
+              sessionId,
+              now,
+              now,
+            );
           added.push(this.theme(id)!);
         }
       }
@@ -259,13 +310,13 @@ export class ProjectLog {
   }
 
   theme(id: string): Theme | null {
-    const row = this.db.query(`SELECT * FROM project_themes WHERE id = ?`).get(id) as ThemeRow | null;
+    const row = this.db.query(`SELECT * FROM preferences WHERE id = ?`).get(id) as ThemeRow | null;
     return row ? toTheme(row) : null;
   }
 
   setThemeEnabled(id: string, enabled: boolean): Theme | null {
     this.db
-      .query(`UPDATE project_themes SET enabled = ?, updated_at = ? WHERE id = ?`)
+      .query(`UPDATE preferences SET enabled = ?, updated_at = ? WHERE id = ?`)
       .run(enabled ? 1 : 0, new Date().toISOString(), id);
     return this.theme(id);
   }

@@ -63,6 +63,8 @@ import {
   ProjectGetParams,
   ProjectRepoRecordsParams,
   ProjectThemeToggleParams,
+  PreferenceListParams,
+  PreferenceRulesParams,
   KnockAskInput,
   CaseCreateParams,
   KnockUpdateInput,
@@ -949,6 +951,28 @@ export function startRpcServer(opts: {
           const theme = store.projects.setThemeEnabled(id, enabled);
           if (!theme) throw new RpcError(-32602, "theme not found");
           return theme;
+        },
+      },
+    ],
+    [
+      "preference.list",
+      {
+        params: PreferenceListParams,
+        handle: (p) => {
+          const { scope, project } = p as PreferenceListParams;
+          if (scope === "all") return { items: store.projects.allThemes() };
+          if (project === undefined) throw new RpcError(-32602, "scope project needs a project");
+          return { items: store.projects.themes(project) };
+        },
+      },
+    ],
+    [
+      "preference.rules",
+      {
+        params: PreferenceRulesParams,
+        handle: (p) => {
+          const { session_id } = p as PreferenceRulesParams;
+          return store.projects.ruleTexts(store.projects.sessionProject(session_id));
         },
       },
     ],

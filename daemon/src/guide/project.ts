@@ -52,6 +52,8 @@ export function projectGuide(d: ProjectGuideData): string {
       "The themes are out of date. Read the comments below. They are the last operator comments in this project, newest first.",
       "Find the taste they show. Then call waggle_themes with action propose.",
       "Send up to 8 themes. Each theme has text, evidence_count and quotes (up to 3 short quotes).",
+      "Each theme has a scope. Use project (the default) for a rule about this project. Use all for a short rule that holds in every project.",
+      "A rule with scope all must name no project and hold no project content. Agents in other projects read it.",
       "Write each theme as one short rule. Do not turn on a theme the person turned off.",
       "",
     );

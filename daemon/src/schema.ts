@@ -1512,6 +1512,35 @@ CREATE INDEX idx_usage_ask ON usage(ask_h);
     // Additive. An older daemon ignores the index, so a rollback is safe.
     sql: `CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, type, at);`,
   },
+  {
+    version: 60,
+    // WAG-415 (Waggle Brain): preferences with a scope. A project_themes row becomes a preference with
+    // scope 'project', with the same id, text, evidence count, quotes, on/off state and proposer. A
+    // preference with scope 'all' has project NULL. case_ids_json holds the evidence cases (the app
+    // shows them; the connect text never does). Versions 59 and 61 belong to parallel work.
+    sql: `
+CREATE TABLE preferences (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL CHECK (scope IN ('project', 'all')),
+  project TEXT,
+  text TEXT NOT NULL,
+  evidence_count INTEGER NOT NULL DEFAULT 0,
+  quotes_json TEXT NOT NULL DEFAULT '[]',
+  case_ids_json TEXT NOT NULL DEFAULT '[]',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  proposed_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK ((scope = 'project') = (project IS NOT NULL))
+);
+INSERT INTO preferences (id, scope, project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at)
+  SELECT id, 'project', project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at
+  FROM project_themes ORDER BY rowid;
+DROP TABLE project_themes;
+CREATE INDEX idx_preferences_project ON preferences(project);
+CREATE INDEX idx_preferences_scope ON preferences(scope);
+`,
+  },
 ];
 
 export function migrate(db: Database): void {
