@@ -46,6 +46,17 @@ enum CompareChoice: CaseIterable, Equatable {
     }
 }
 
+/// How much room the stage controls take (narrow-window fix). The toolbar tries each step in order and
+/// keeps the first that fits: the "No earlier revision yet" hint goes first, then Compare folds into a menu.
+enum StageControlsDensity: CaseIterable, Equatable {
+    case full
+    case noHint
+    case compareMenu
+
+    var showsNoEarlierHint: Bool { self == .full }
+    var comparesInMenu: Bool { self == .compareMenu }
+}
+
 enum CompareCopy {
     static let switchLabel = "Compare"
     static let noEarlier = "No earlier revision yet"

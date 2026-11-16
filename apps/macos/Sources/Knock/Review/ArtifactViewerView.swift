@@ -392,7 +392,17 @@ struct ArtifactViewerView: View {
                 artifactTabsRow(showsCaptureChip: false)
                 // Narrowest: the isolation badges go too, so the tabs keep room (WAG-309).
                 artifactTabsRow(showsCaptureChip: false, showsBadges: false)
+                // Still too wide: the stage controls give way, the hint first, then Compare as a menu.
+                artifactTabsRow(showsCaptureChip: false, showsBadges: false, density: .noHint)
+                artifactTabsRow(showsCaptureChip: false, showsBadges: false, density: .compareMenu)
+                // Last step: the "Screenshots · v1" label goes and the screen title may shorten (it truncates),
+                // so the row never runs past the stage and Open stays on screen.
+                artifactTabsRow(
+                    showsCaptureChip: false, showsBadges: false, density: .compareMenu, titleMinWidth: 0, showsChrome: false)
             }
+            // The row never makes the stage wider than its share of the window.
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
     }
 
@@ -578,18 +588,23 @@ struct ArtifactViewerView: View {
         (viewModel.detail?.revisions.map(\.n).max()).map { max($0, artifactState.revision ?? 0) } ?? artifactState.revision
     }
 
-    private func artifactTabsRow(showsCaptureChip: Bool, showsBadges: Bool = true) -> some View {
+    private func artifactTabsRow(
+        showsCaptureChip: Bool, showsBadges: Bool = true, density: StageControlsDensity = .full,
+        titleMinWidth: CGFloat = ScreenTitleLabel.fullSizeMinWidth, showsChrome: Bool = true
+    ) -> some View {
         HStack(spacing: 6) {
             if showsTabStrip { tabStrip }
-            Text(chromeText)
-                .knockTextStyle(Theme.Typography.monoMeta12w400)
-                .foregroundColor(Theme.Colors.ink2)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+            if showsChrome {
+                Text(chromeText)
+                    .knockTextStyle(Theme.Typography.monoMeta12w400)
+                    .foregroundColor(Theme.Colors.ink2)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
             if isScreenshots, !isSetView {
                 // The title keeps room for a few words; the controls on the right give way first.
-                ScreenTitleLabel(store: viewModel.commentsStore)
-                    .frame(minWidth: ScreenTitleLabel.fullSizeMinWidth, alignment: .leading)
+                ScreenTitleLabel(store: viewModel.commentsStore, showsDivider: showsChrome)
+                    .frame(minWidth: titleMinWidth, alignment: .leading)
             }
             if let mark = newMarkRevision, mark == artifactState.revision {
                 Text("new")
@@ -630,7 +645,7 @@ struct ArtifactViewerView: View {
             if showsStageControls {
                 StageHeaderControls(
                     stage: stageModel, showsSetToggle: isScreenshots, onShowSet: showSet,
-                    compare: compare, compareAvailable: compareAvailable
+                    compare: compare, compareAvailable: compareAvailable, density: density
                 )
                     .fixedSize()
             } else if showsPrototypeZoom {

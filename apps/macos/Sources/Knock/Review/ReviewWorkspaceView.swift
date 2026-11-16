@@ -177,12 +177,12 @@ struct ReviewWorkspaceView: View {
                         changedAt: detail.latestReplyChangedAtDate, roundArrivedAt: detail.roundArrivedAtDate, onBack: onBack,
                         shareControl: AnyView(ShareCaseButton(model: sharing, onViewComments: { viewModel.selectTab(ShareSheetLogic.viewTab) }))
                     )
-                    HStack(spacing: 0) {
+                    StageAndColumnRow(columnWidth: columnWidth) {
                         ArtifactViewerView(
                             viewModel: viewModel, isLocked: isAnswerLocked,
                             onOpenWindow: openTabInWindow, onOpenBrowser: openTabInBrowser)
+                    } column: {
                         rightColumn
-                            .frame(width: columnWidth)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { stageWidth = $0 }
@@ -301,13 +301,13 @@ struct ReviewWorkspaceView: View {
                 fold: fold, knockCase: detail.case, task: detail.task, sessionTitle: sessionTitle, now: now,
                 changedAt: detail.latestReplyChangedAtDate, roundArrivedAt: detail.roundArrivedAtDate, askColumnWidth: askColumnWidth, onHome: onHome,
                 shareControl: AnyView(ShareCaseButton(model: sharing, onViewComments: { viewModel.selectTab(ShareSheetLogic.viewTab) })))
-            HStack(spacing: 0) {
+            StageAndColumnRow(columnWidth: fold.isAskFolded ? nil : columnWidth) {
                 ArtifactViewerView(
-                            viewModel: viewModel, isLocked: isAnswerLocked,
-                            onOpenWindow: openTabInWindow, onOpenBrowser: openTabInBrowser)
+                    viewModel: viewModel, isLocked: isAnswerLocked,
+                    onOpenWindow: openTabInWindow, onOpenBrowser: openTabInBrowser)
+            } column: {
                 if !fold.isAskFolded {
                     rightColumn
-                        .frame(width: columnWidth)
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { askColumnWidth = $0 }
                 } else {
                     AskFoldedStripView(label: AskStripCopy.label(for: detail.case), onUnfold: fold.toggleAsk)
