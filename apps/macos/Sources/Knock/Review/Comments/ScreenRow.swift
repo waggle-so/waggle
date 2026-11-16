@@ -147,6 +147,8 @@ struct ScreenRow: View {
 /// bold, then the caption without its letter ("C2 Riepilogo dopo la sync…"). "Screen N" for a screen with no caption.
 struct ScreenTitleLabel: View {
     @ObservedObject var store: CommentsSessionStore
+    /// The line that sets the title apart from the label before it. It goes when that label goes.
+    var showsDivider = true
 
     /// Full size: room for the badge and a few words of the caption ("C2 Riepilogo dopo la…").
     static let fullSizeMinWidth: CGFloat = 200
@@ -157,7 +159,9 @@ struct ScreenTitleLabel: View {
             let caption = label?.badge == nil ? store.screenTitle(for: capture)
                 : ScreenRowLabels.title(caption: store.captionsByCaptureId[capture.id])
             HStack(spacing: 8) {
-                Rectangle().fill(Theme.Colors.line2).frame(width: 1, height: 14)
+                if showsDivider {
+                    Rectangle().fill(Theme.Colors.line2).frame(width: 1, height: 14)
+                }
                 (Text(label?.badge.map { "\($0) " } ?? "").fontWeight(.bold).foregroundColor(Theme.Colors.ink)
                     + Text(caption ?? "").foregroundColor(Theme.Colors.ink2))
                     .knockTextStyle(Theme.Typography.screenTitle12w400)

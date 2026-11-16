@@ -94,21 +94,50 @@ struct PanMirror: NSViewRepresentable {
 struct CompareSwitch: View {
     @ObservedObject var compare: CompareModel
     let isAvailable: Bool
+    var density: StageControlsDensity = .full
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                if !isAvailable {
-                    Text(CompareCopy.noEarlier)
-                        .knockTextStyle(Theme.Typography.monoMeta11w400)
-                        .foregroundColor(Theme.Colors.ink3)
-                        .lineLimit(1)
+        Group {
+            if density.comparesInMenu {
+                menu
+            } else {
+                HStack(spacing: 8) {
+                    if !isAvailable, density.showsNoEarlierHint {
+                        Text(CompareCopy.noEarlier)
+                            .knockTextStyle(Theme.Typography.monoMeta11w400)
+                            .foregroundColor(Theme.Colors.ink3)
+                            .lineLimit(1)
+                    }
+                    segments
                 }
-                segments
             }
-            segments
         }
         .fixedSize()
+    }
+
+    /// Narrowest step: one small "Compare: Off" menu with the same three choices.
+    private var menu: some View {
+        let current = isAvailable ? compare.choice : .off
+        return Menu {
+            ForEach(CompareChoice.allCases, id: \.self) { choice in
+                Button {
+                    compare.choose(choice)
+                } label: {
+                    if choice == current { Label(choice.label, systemImage: "checkmark") } else { Text(choice.label) }
+                }
+            }
+        } label: {
+            Text("\(CompareCopy.switchLabel): \(current.label)")
+                .knockTextStyle(Theme.Typography.buttonSm12_5w500)
+                .foregroundColor(isAvailable ? Theme.Colors.ink2 : Theme.Colors.ink3)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .disabled(!isAvailable)
+        .pointerCursor()
+        .help(isAvailable ? "Show this revision next to the one before it" : CompareCopy.noEarlier)
+        .accessibilityLabel(CompareCopy.switchLabel)
+        .accessibilityValue(current.label)
     }
 
     private var segments: some View {

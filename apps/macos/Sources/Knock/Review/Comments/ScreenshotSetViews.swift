@@ -11,6 +11,8 @@ struct StageHeaderControls: View {
     /// WAG-413: the Compare switch, shown beside the zoom controls of One view.
     var compare: CompareModel?
     var compareAvailable = false
+    /// Narrow windows: the hint goes first, then Compare folds into a menu.
+    var density: StageControlsDensity = .full
 
     var body: some View {
         HStack(spacing: 10) {
@@ -21,7 +23,7 @@ struct StageHeaderControls: View {
                 }
             }
             if stage.arrangement == .one, let compare {
-                CompareSwitch(compare: compare, isAvailable: compareAvailable)
+                CompareSwitch(compare: compare, isAvailable: compareAvailable, density: density)
             }
             if stage.arrangement == .one {
                 StageControl.track {
