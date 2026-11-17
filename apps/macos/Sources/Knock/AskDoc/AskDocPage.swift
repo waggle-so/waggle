@@ -368,12 +368,36 @@ struct AskTitleView: View {
         if let heading {
             RoundHeadingView(heading: heading, titleStyle: width.titleStyle)
         } else {
-            let split = TitleSplit.make(title)
-            VStack(alignment: .leading, spacing: 6) {
-                TitleText(text: split.title, style: width.titleStyle)
-                if let description = split.description {
-                    TitleDescriptionView(text: description)
-                }
+            SplitTitleView(text: title, style: width.titleStyle, spacing: 6)
+        }
+    }
+}
+
+/// A title that `TitleSplit` keeps short, with its description under it. When the 80-character cut ends
+/// the title with "…", a "Show all" link shows the whole sentence as the title.
+struct SplitTitleView: View {
+    let text: String
+    let style: Theme.TextStyle
+    var spacing: CGFloat = 4
+    @State private var showsAll = ProcessInfo.processInfo.environment["KNOCK_EVIDENCE_SHOW_ALL"] == "1"
+
+    var body: some View {
+        let split = TitleSplit.make(text)
+        let isCut = split.fullTitle != nil
+        let title = showsAll ? (split.fullTitle ?? split.title) : split.title
+        let description = showsAll && isCut ? split.fullDescription : split.description
+        VStack(alignment: .leading, spacing: spacing) {
+            TitleText(text: title, style: style)
+            if let description {
+                TitleDescriptionView(text: description)
+            }
+            if isCut {
+                Button(showsAll ? "Show less" : "Show all") { showsAll.toggle() }
+                    .buttonStyle(.plain).pointerCursor()
+                    .knockTextStyle(Theme.Typography.caption11_5w400)
+                    .foregroundColor(Theme.Colors.ink2)
+                    .underline()
+                    .accessibilityIdentifier("title-show-all")
             }
         }
     }

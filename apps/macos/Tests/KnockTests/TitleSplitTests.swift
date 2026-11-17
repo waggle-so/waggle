@@ -32,6 +32,25 @@ struct TitleSplitTests {
         #expect(split.description == "should we build first")
     }
 
+    @Test func aCutTitleKeepsItsWholeSentenceForShowAll() {
+        let text = "Which of these three very different layouts for the flagged conversations inbox should we build first? "
+            + "We can change it later."
+        let split = TitleSplit.make(text)
+        #expect(split.title == "Which of these three very different layouts for the flagged conversations inbox…")
+        #expect(split.description == "should we build first? We can change it later.")
+        #expect(split.fullTitle == "Which of these three very different layouts for the flagged conversations inbox should we build first?")
+        #expect(split.fullDescription == "We can change it later.")
+    }
+
+    @Test func aTitleThatIsNotCutHasNoShowAll() {
+        let split = TitleSplit.make("Here is the side panel variant. Open a flagged conversation.")
+        #expect(split.fullTitle == nil)
+        #expect(split.fullDescription == nil)
+        let oneSentence = TitleSplit.make(String(repeating: "word ", count: 16) + "end")
+        #expect(oneSentence.fullTitle == String(repeating: "word ", count: 16) + "end")
+        #expect(oneSentence.fullDescription == nil)
+    }
+
     @Test func severalSentencesKeepTheFirst() {
         let text = "Here is the side panel variant. Open a flagged conversation. The panel slides in from the right."
         let split = TitleSplit.make(text)

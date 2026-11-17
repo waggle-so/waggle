@@ -10,16 +10,22 @@ struct TitleSplit: Equatable {
     let title: String
     /// What the title left out, or nil when the title is short and one sentence.
     let description: String?
+    /// The whole first sentence when the 80-character cut ended it with "…", else nil. "Show all" shows it.
+    var fullTitle: String? = nil
+    /// The text after that whole sentence, for "Show all". Nil when there is none.
+    var fullDescription: String? = nil
 
     static func make(_ text: String) -> TitleSplit {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        var (title, tail) = firstSentence(of: trimmed)
-        if title.count > maxTitleLength {
-            let cut = wordCut(title)
-            title = cut.head + "…"
-            tail = [cut.tail, tail].filter { !$0.isEmpty }.joined(separator: " ")
+        let (sentence, rest) = firstSentence(of: trimmed)
+        guard sentence.count > maxTitleLength else {
+            return TitleSplit(title: sentence, description: rest.isEmpty ? nil : rest)
         }
-        return TitleSplit(title: title, description: tail.isEmpty ? nil : tail)
+        let cut = wordCut(sentence)
+        let tail = [cut.tail, rest].filter { !$0.isEmpty }.joined(separator: " ")
+        return TitleSplit(
+            title: cut.head + "…", description: tail.isEmpty ? nil : tail,
+            fullTitle: sentence, fullDescription: rest.isEmpty ? nil : rest)
     }
 
     /// The text up to the first sentence end (a ".", "!" or "?" before a space) or the first new line.
