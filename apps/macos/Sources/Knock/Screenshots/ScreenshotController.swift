@@ -186,6 +186,9 @@ final class ScreenshotController {
             })
         let host = NSHostingView(rootView: view)
         let size = host.fittingSize
+        // Measure first, then keep that size: with the default sizing options the hosting view also resizes the
+        // window, and the two can fight over a fraction of a point until AppKit throws (crash on 0.2.72).
+        host.sizingOptions = []
         let panel = makePanel(content: host, size: size)
         let screen = Self.screen()
         panel.setFrameOrigin(ScreenshotGeometry.badgeOrigin(screen: screen.visibleFrame, size: size))
@@ -342,6 +345,9 @@ final class ScreenshotController {
         guard showsWindows else { return }
         let host = NSHostingView(rootView: ScreenshotNoticeView(text: text))
         let size = host.fittingSize
+        // Measure first, then keep that size: with the default sizing options the hosting view also resizes the
+        // window, and the two can fight over a fraction of a point until AppKit throws (crash on 0.2.72).
+        host.sizingOptions = []
         let panel = makePanel(content: host, size: size)
         panel.setFrameOrigin(ScreenshotGeometry.shortcutPanelOrigin(screen: Self.screen().visibleFrame, size: size))
         panel.orderFrontRegardless()
