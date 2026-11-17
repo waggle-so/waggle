@@ -1190,6 +1190,9 @@ struct Case: Codable, Equatable, Sendable, Identifiable {
     let sessionEndedAt: String?
     /// How a rule decided this case (WAG-412, "Ask less"). `nil` for a case a person decided, and for an older daemon.
     var autoDecided: AutoDecided? = nil
+    /// WAG-418: the past decided cases that fit this ask when it was created. `nil` when the key is absent (no match, or
+    /// an older daemon).
+    var matchedCaseIds: [String]? = nil
     /// The owning task's name/project, denormalized directly onto `Case`
     /// (daemon/src/protocol/nouns.ts: "so `cases.list` alone can render a
     /// queue row ... without a per-row `cases.get`") - this has been true of
@@ -1263,6 +1266,7 @@ struct Case: Codable, Equatable, Sendable, Identifiable {
         case sessionClientName = "session_client_name"
         case sessionEndedAt = "session_ended_at"
         case autoDecided = "auto_decided"
+        case matchedCaseIds = "matched_case_ids"
         case taskName = "task_name"
         case project
         case createdAt = "created_at"
@@ -1337,6 +1341,7 @@ struct Case: Codable, Equatable, Sendable, Identifiable {
         sessionClientName = try c.decodeIfPresent(String.self, forKey: .sessionClientName)
         sessionEndedAt = try c.decodeIfPresent(String.self, forKey: .sessionEndedAt)
         autoDecided = try? c.decodeIfPresent(AutoDecided.self, forKey: .autoDecided)
+        matchedCaseIds = try? c.decodeIfPresent([String].self, forKey: .matchedCaseIds)
         taskName = try c.decodeIfPresent(String.self, forKey: .taskName) ?? ""
         project = try c.decodeIfPresent(String.self, forKey: .project) ?? ""
         createdAt = try c.decode(String.self, forKey: .createdAt)
@@ -1372,7 +1377,7 @@ struct Case: Codable, Equatable, Sendable, Identifiable {
         runtime: Runtime = .claude, sessionState: SessionState? = nil,
         dismissedAt: String? = nil, followsCaseId: String? = nil, replacesCaseId: String? = nil,
         withdrawnAt: String? = nil, doneAt: String? = nil, workingNote: String? = nil, lastCheckAt: String? = nil, sessionCanNudge: Bool? = nil, sessionClientName: String? = nil, sessionEndedAt: String? = nil, taskName: String = "", project: String = "",
-        createdAt: String, updatedAt: String, autoDecided: AutoDecided? = nil,
+        createdAt: String, updatedAt: String, autoDecided: AutoDecided? = nil, matchedCaseIds: [String]? = nil,
         firstOptions: [Option]? = nil, firstRecommendation: String? = nil, optionsUpdatedAt: String? = nil,
         latestReplyFromFirstOptions: Bool = false,
         plan: PlanInfo? = nil, artifactKind: ArtifactKind? = nil,
@@ -1436,6 +1441,7 @@ struct Case: Codable, Equatable, Sendable, Identifiable {
         self.sessionClientName = sessionClientName
         self.sessionEndedAt = sessionEndedAt
         self.autoDecided = autoDecided
+        self.matchedCaseIds = matchedCaseIds
         self.taskName = taskName
         self.project = project
         self.createdAt = createdAt

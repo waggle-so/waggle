@@ -6,12 +6,27 @@ import type { Database } from "bun:sqlite";
 
 export const MAX_THEMES_PER_PROPOSAL = 8;
 export const MAX_QUOTES = 3;
+const MAX_CASE_IDS = 10;
 const MAX_THEME_TEXT = 200;
 const MAX_QUOTE_TEXT = 160;
 // More than this many new comments since the last proposal makes the themes stale.
 export const STALE_COMMENT_COUNT = 20;
 export const GUIDE_COMMENT_COUNT = 50;
 export const GUIDE_DECISION_COUNT = 10;
+// WAG-417: this many new corrections since the last proposal make the guide ask for rules.
+export const CORRECTION_TRIGGER_COUNT = 5;
+// The most corrected asks the guide lists.
+export const GUIDE_CORRECTION_COUNT = 20;
+const MAX_CORRECTION_TEXT = 120;
+
+// One corrected ask: the question, what the agent recommended, and what the person did.
+export interface CorrectedAsk {
+  case_id: string;
+  question: string;
+  recommended: string;
+  outcome: string;
+  at: string;
+}
 
 export interface DecisionRecord {
   case_id: string;
@@ -29,21 +44,37 @@ export interface ProjectStats {
   last_decision_at: string | null;
 }
 
+export type PreferenceScope = "project" | "all";
+
 export interface Theme {
   id: string;
+  scope: PreferenceScope;
+  // The project of a project rule; null for scope all.
+  project: string | null;
   text: string;
   evidence_count: number;
   quotes: string[];
+  // Evidence cases. Only the app reads them; the connect text never carries them.
+  case_ids: string[];
   enabled: boolean;
   proposed_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
+// One evidence line of a preference: the question of a stored case and what the person did.
+export interface PreferenceEvidence {
+  case_id: string;
+  question: string;
+  did: string;
+}
+
 export interface ThemeInput {
   text: string;
   evidence_count: number;
   quotes: string[];
+  case_ids?: string[];
+  scope?: PreferenceScope;
 }
 
 export interface ProposeResult {
@@ -59,6 +90,9 @@ interface OptionRow {
 
 interface ThemeRow {
   id: string;
+  scope: PreferenceScope;
+  project: string | null;
+  case_ids_json: string;
   text: string;
   evidence_count: number;
   quotes_json: string;
@@ -71,9 +105,12 @@ interface ThemeRow {
 function toTheme(row: ThemeRow): Theme {
   return {
     id: row.id,
+    scope: row.scope,
+    project: row.project,
     text: row.text,
     evidence_count: row.evidence_count,
     quotes: JSON.parse(row.quotes_json) as string[],
+    case_ids: JSON.parse(row.case_ids_json) as string[],
     enabled: row.enabled === 1,
     proposed_by: row.proposed_by,
     created_at: row.created_at,
@@ -120,6 +157,16 @@ const DECISIONS_FROM = `
       AND (choice IS NOT NULL OR choices_json IS NOT NULL)
     ORDER BY created_at DESC, rowid DESC LIMIT 1)
   WHERE t.project = ?1 AND c.withdrawn_at IS NULL AND c.dismissed_at IS NULL`;
+
+// The newest correction reply of each ask. A failed or superseded reply does not count.
+const CORRECTIONS_FROM = `
+  FROM cases c
+  JOIN tasks t ON t.id = c.task_id
+  JOIN replies r ON r.id = (
+    SELECT id FROM replies
+    WHERE case_id = c.id AND correction = 1 AND state NOT IN ('failed', 'superseded')
+    ORDER BY created_at DESC, rowid DESC LIMIT 1)
+  WHERE t.project = ?1`;
 
 export class ProjectLog {
   constructor(private readonly db: Database) {}
@@ -212,11 +259,218 @@ export class ProjectLog {
     return n > STALE_COMMENT_COUNT;
   }
 
+  // Corrections (replies.correction = 1) after the last proposal. All of them with no proposal yet.
+  newCorrectionCount(project: string): number {
+    const last = this.prefs(project).last_proposed_at;
+    return (
+      this.db
+        .query(`SELECT COUNT(DISTINCT r.case_id) AS n ${CORRECTIONS_FROM} AND (?2 IS NULL OR r.created_at > ?2)`)
+        .get(project, last) as { n: number }
+    ).n;
+  }
+
+  // True at CORRECTION_TRIGGER_COUNT new corrections or more.
+  correctionsDue(project: string): boolean {
+    return this.newCorrectionCount(project) >= CORRECTION_TRIGGER_COUNT;
+  }
+
+  // The corrected asks after the last proposal, newest first. One entry for each ask: its newest correction.
+  correctedAsks(project: string, limit = GUIDE_CORRECTION_COUNT): CorrectedAsk[] {
+    const last = this.prefs(project).last_proposed_at;
+    const rows = this.db
+      .query(
+        `SELECT c.id AS case_id, c.title, c.options_json, c.recommendation, c.recommendation_why,
+                r.id AS reply_id, r.choice, r.choices_json, r.message, r.created_at AS at,
+                (SELECT seq FROM reply_option_sets WHERE reply_id = r.id) AS seq
+         ${CORRECTIONS_FROM} AND (?2 IS NULL OR r.created_at > ?2)
+         ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?3`,
+      )
+      .all(project, last, limit) as {
+      case_id: string;
+      title: string;
+      options_json: string;
+      recommendation: string;
+      recommendation_why: string;
+      reply_id: string;
+      choice: string | null;
+      choices_json: string | null;
+      message: string | null;
+      at: string;
+      seq: number | null;
+    }[];
+    return rows.map((row) => {
+      const { options } = this.optionSet(row.case_id, row.seq, row.options_json, row.recommendation_why);
+      const name = (id: string) => {
+        const o = options.find((x) => x.id === id);
+        return o ? (o.title ?? o.label) : id;
+      };
+      const picked = row.choices_json !== null ? (JSON.parse(row.choices_json) as string[]) : row.choice ? [row.choice] : [];
+      const comments = (
+        this.db.query(`SELECT text FROM comments WHERE reply_id = ? AND TRIM(text) <> '' ORDER BY rowid`).all(row.reply_id) as { text: string }[]
+      ).map((c) => clip(c.text, MAX_CORRECTION_TEXT));
+      const note = clip(row.message ?? "", MAX_CORRECTION_TEXT);
+      const parts: string[] = [];
+      if (picked.includes("request_changes")) parts.push("asked for changes");
+      else if (picked.length > 0 && !picked.every((id) => id === row.recommendation)) parts.push(`picked ${picked.map(name).join(", ")}`);
+      if (comments.length > 0) parts.push(`comments: ${comments.join(" / ")}`);
+      if (note !== "") parts.push(picked.length === 0 ? `wrote own answer: ${note}` : `wrote: ${note}`);
+      if (parts.length === 0) parts.push("changed the answer");
+      return {
+        case_id: row.case_id,
+        question: clip(row.title, MAX_CORRECTION_TEXT),
+        recommended: row.recommendation === "" ? "" : name(row.recommendation),
+        outcome: parts.join("; "),
+        at: row.at,
+      };
+    });
+  }
+
+  // The preferences with scope project for one project.
   themes(project: string): Theme[] {
     const rows = this.db
-      .query(`SELECT * FROM project_themes WHERE project = ? ORDER BY created_at, rowid`)
+      .query(`SELECT * FROM preferences WHERE scope = 'project' AND project = ? ORDER BY created_at, rowid`)
       .all(project) as ThemeRow[];
     return rows.map(toTheme);
+  }
+
+  // The preferences with scope all. They belong to no project.
+  allThemes(): Theme[] {
+    const rows = this.db
+      .query(`SELECT * FROM preferences WHERE scope = 'all' ORDER BY created_at, rowid`)
+      .all() as ThemeRow[];
+    return rows.map(toTheme);
+  }
+
+  // Rule text of the preferences that are on, for the connect text: scope all first, then this
+  // project's. Text only: never evidence, quotes or case ids.
+  ruleTexts(project: string | null): { all: string[]; project: string[] } {
+    return {
+      all: this.allThemes().filter((t) => t.enabled).map((t) => t.text),
+      project: project === null ? [] : this.themes(project).filter((t) => t.enabled).map((t) => t.text),
+    };
+  }
+
+  // Every preference, for the Settings list: scope all first, then project rules grouped by project
+  // name (case-insensitive), oldest first inside a group.
+  allPreferences(): Theme[] {
+    const rows = this.db
+      .query(
+        `SELECT * FROM preferences
+         ORDER BY (scope = 'all') DESC, project COLLATE NOCASE, created_at, rowid`,
+      )
+      .all() as ThemeRow[];
+    return rows.map(toTheme);
+  }
+
+  // Every project name the daemon knows: the tasks' tags and the projects that hold a rule.
+  projectNames(): string[] {
+    const rows = this.db
+      .query(
+        `SELECT project FROM (
+           SELECT project FROM tasks WHERE project IS NOT NULL AND TRIM(project) <> ''
+           UNION SELECT project FROM preferences WHERE project IS NOT NULL)
+         ORDER BY project COLLATE NOCASE`,
+      )
+      .all() as { project: string }[];
+    return rows.map((r) => r.project);
+  }
+
+  // The evidence lines of one preference, in the order of its stored case ids. A case that is gone is
+  // left out. `did` is empty when the case has no deciding reply. `project` is the project that most
+  // of the cases belong to (else the only project there is, else null): the target of "Only this project".
+  evidence(id: string): { items: PreferenceEvidence[]; project: string | null } | null {
+    const theme = this.theme(id);
+    if (!theme) return null;
+    const items: PreferenceEvidence[] = [];
+    const counts = new Map<string, number>();
+    for (const caseId of theme.case_ids) {
+      const row = this.db
+        .query(
+          `SELECT c.title, c.options_json, c.recommendation_why, t.project AS project,
+                  r.id AS reply_id, r.choice, r.choices_json, r.message,
+                  (SELECT seq FROM reply_option_sets WHERE reply_id = r.id) AS seq
+           FROM cases c
+           JOIN tasks t ON t.id = c.task_id
+           LEFT JOIN replies r ON r.id = (
+             SELECT id FROM replies
+             WHERE case_id = c.id AND intent = 'decision' AND state NOT IN ('failed', 'superseded')
+               AND (choice IS NOT NULL OR choices_json IS NOT NULL OR (message IS NOT NULL AND TRIM(message) <> ''))
+             ORDER BY created_at DESC, rowid DESC LIMIT 1)
+           WHERE c.id = ?`,
+        )
+        .get(caseId) as {
+        title: string;
+        options_json: string;
+        recommendation_why: string;
+        project: string | null;
+        reply_id: string | null;
+        choice: string | null;
+        choices_json: string | null;
+        message: string | null;
+        seq: number | null;
+      } | null;
+      if (!row) continue;
+      if (row.project) counts.set(row.project, (counts.get(row.project) ?? 0) + 1);
+      let did = "";
+      if (row.reply_id !== null) {
+        const set = this.optionSet(caseId, row.seq, row.options_json, row.recommendation_why);
+        const ids = row.choices_json !== null ? (JSON.parse(row.choices_json) as string[]) : row.choice ? [row.choice] : [];
+        const names = ids.map((x) => {
+          const o = set.options.find((y) => y.id === x);
+          return o ? (o.title ?? o.label) : x;
+        });
+        const note = clip(row.message ?? "", 120);
+        if (row.choice === "request_changes") did = note !== "" ? `Asked for changes: ${note}` : "Asked for changes.";
+        else if (names.length > 0) did = note !== "" ? `Picked ${names.join(", ")}. ${note}` : `Picked ${names.join(", ")}.`;
+        else if (note !== "") did = `Wrote: ${note}`;
+      }
+      items.push({ case_id: caseId, question: row.title, did });
+    }
+    let project: string | null = null;
+    let best = 0;
+    for (const [name, n] of counts) if (n > best || (n === best && project !== null && name < project)) [project, best] = [name, n];
+    if (project === null) {
+      const names = this.projectNames();
+      if (names.length === 1) project = names[0]!;
+    }
+    return { items, project };
+  }
+
+  // A rule written by hand. Scope all unless a project is given. A rule with the same text in that
+  // scope is turned on instead of copied.
+  addPreference(text: string, project: string | null, now = new Date().toISOString()): Theme {
+    const clean = clip(text, MAX_THEME_TEXT);
+    if (clean === "") throw new Error("empty rule");
+    const scope: PreferenceScope = project === null ? "all" : "project";
+    const existing = (scope === "all" ? this.allThemes() : this.themes(project!)).find((t) => sameTheme(t.text, clean));
+    if (existing) {
+      this.db.query(`UPDATE preferences SET enabled = 1, updated_at = ? WHERE id = ?`).run(now, existing.id);
+      return this.theme(existing.id)!;
+    }
+    const id = `th_${randomUUID().slice(0, 8)}`;
+    this.db
+      .query(
+        `INSERT INTO preferences (id, scope, project, text, evidence_count, quotes_json, case_ids_json, enabled, proposed_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, '[]', '[]', 1, NULL, ?, ?)`,
+      )
+      .run(id, scope, project, clean, now, now);
+    return this.theme(id)!;
+  }
+
+  // Changes the text of a rule. Evidence, quotes and on/off stay.
+  setThemeText(id: string, text: string): Theme | null {
+    const clean = clip(text, MAX_THEME_TEXT);
+    if (clean === "") throw new Error("empty rule");
+    this.db.query(`UPDATE preferences SET text = ?, updated_at = ? WHERE id = ?`).run(clean, new Date().toISOString(), id);
+    return this.theme(id);
+  }
+
+  // Moves a rule to scope all (project null) or to one project. Everything else stays.
+  setThemeScope(id: string, project: string | null): Theme | null {
+    this.db
+      .query(`UPDATE preferences SET scope = ?, project = ?, updated_at = ? WHERE id = ?`)
+      .run(project === null ? "all" : "project", project, new Date().toISOString(), id);
+    return this.theme(id);
   }
 
   // Adds new themes and merges the ones whose text matches an existing theme. A merge raises the
@@ -229,22 +483,43 @@ export class ProjectLog {
         const text = clip(input.text, MAX_THEME_TEXT);
         if (text === "") continue;
         const quotes = input.quotes.map((q) => clip(q, MAX_QUOTE_TEXT)).filter((q) => q !== "");
-        const existing = this.themes(project).find((t) => sameTheme(t.text, text));
+        const scope: PreferenceScope = input.scope ?? "project";
+        const caseIds = [...new Set(input.case_ids ?? [])].slice(0, MAX_CASE_IDS);
+        const existing = (scope === "all" ? this.allThemes() : this.themes(project)).find((t) => sameTheme(t.text, text));
         if (existing) {
           const all = [...existing.quotes];
           for (const q of quotes) if (!all.includes(q)) all.push(q);
+          const cases = [...existing.case_ids];
+          for (const c of caseIds) if (!cases.includes(c)) cases.push(c);
           this.db
-            .query(`UPDATE project_themes SET evidence_count = ?, quotes_json = ?, updated_at = ? WHERE id = ?`)
-            .run(Math.max(existing.evidence_count, input.evidence_count), JSON.stringify(all.slice(0, MAX_QUOTES)), now, existing.id);
+            .query(`UPDATE preferences SET evidence_count = ?, quotes_json = ?, case_ids_json = ?, updated_at = ? WHERE id = ?`)
+            .run(
+              Math.max(existing.evidence_count, input.evidence_count),
+              JSON.stringify(all.slice(0, MAX_QUOTES)),
+              JSON.stringify(cases.slice(0, MAX_CASE_IDS)),
+              now,
+              existing.id,
+            );
           merged.push(this.theme(existing.id)!);
         } else {
           const id = `th_${randomUUID().slice(0, 8)}`;
           this.db
             .query(
-              `INSERT INTO project_themes (id, project, text, evidence_count, quotes_json, enabled, proposed_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+              `INSERT INTO preferences (id, scope, project, text, evidence_count, quotes_json, case_ids_json, enabled, proposed_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
             )
-            .run(id, project, text, input.evidence_count, JSON.stringify(quotes.slice(0, MAX_QUOTES)), sessionId, now, now);
+            .run(
+              id,
+              scope,
+              scope === "all" ? null : project,
+              text,
+              input.evidence_count,
+              JSON.stringify(quotes.slice(0, MAX_QUOTES)),
+              JSON.stringify(caseIds),
+              sessionId,
+              now,
+              now,
+            );
           added.push(this.theme(id)!);
         }
       }
@@ -259,13 +534,13 @@ export class ProjectLog {
   }
 
   theme(id: string): Theme | null {
-    const row = this.db.query(`SELECT * FROM project_themes WHERE id = ?`).get(id) as ThemeRow | null;
+    const row = this.db.query(`SELECT * FROM preferences WHERE id = ?`).get(id) as ThemeRow | null;
     return row ? toTheme(row) : null;
   }
 
   setThemeEnabled(id: string, enabled: boolean): Theme | null {
     this.db
-      .query(`UPDATE project_themes SET enabled = ?, updated_at = ? WHERE id = ?`)
+      .query(`UPDATE preferences SET enabled = ?, updated_at = ? WHERE id = ?`)
       .run(enabled ? 1 : 0, new Date().toISOString(), id);
     return this.theme(id);
   }

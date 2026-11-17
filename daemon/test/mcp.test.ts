@@ -169,6 +169,23 @@ describe("waggle mcp", () => {
     expect(text.endsWith(askAgentText(store.getAskPreferences()))).toBe(true);
   });
 
+  test("initialize carries the How this person decides block: all rules, then this project's (WAG-415)", async () => {
+    const { home, cwd, store } = setup();
+    await startShim(home, "sess-first", cwd);
+    const project = store.projects.sessionProject("sess-first")!;
+    store.projects.propose(project, "sess-first", [
+      { text: "Rule for this project", evidence_count: 1, quotes: ["secret quote"], case_ids: ["c_secret"] },
+      { text: "Rule for all", evidence_count: 1, quotes: [], scope: "all" },
+    ]);
+    store.projects.propose("another-project", null, [{ text: "Rule for another project", evidence_count: 1, quotes: [] }]);
+    const { client } = await startShim(home, "sess-second", cwd);
+    const text = client.getInstructions() ?? "";
+    expect(text.endsWith("## How this person decides\n\n- Rule for all\n- Rule for this project")).toBe(true);
+    expect(text).not.toContain("another project");
+    expect(text).not.toContain("secret quote");
+    expect(text).not.toContain("c_secret");
+  });
+
   test("initialize serves the codex runtime note for a codex session (HAIL-38)", async () => {
     const { home, cwd } = setup();
     const { client } = await startShim(home, "sess-codex", cwd, { KNOCK_RUNTIME: "codex" });

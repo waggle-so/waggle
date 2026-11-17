@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { EventBus } from "../src/events";
 import { getGuide, guideTopics } from "../src/guide";
 import { projectGuide } from "../src/guide/project";
+import { CORRECTION_TRIGGER_COUNT, GUIDE_CORRECTION_COUNT } from "../src/projects";
 import { buildMcpTools, KNOCK_ASK_DESCRIPTION } from "../src/protocol/mcp";
 import type { KnockAskInput } from "../src/protocol";
 import { startRpcServer, type RpcServer } from "../src/server";
@@ -128,8 +129,8 @@ describe("themes", () => {
 describe("project guide topic", () => {
   const base = { project: "waggle", decisions: [], themes: [], repoRecords: false, stale: false, comments: [] };
   const themes = [
-    { id: "1", text: "Plain words", evidence_count: 2, quotes: [], enabled: true, proposed_by: null, created_at: "", updated_at: "" },
-    { id: "2", text: "Dark chrome", evidence_count: 2, quotes: [], enabled: false, proposed_by: null, created_at: "", updated_at: "" },
+    { id: "1", scope: "project" as const, case_ids: [] as string[], text: "Plain words", evidence_count: 2, quotes: [], enabled: true, proposed_by: null, created_at: "", updated_at: "" },
+    { id: "2", scope: "project" as const, case_ids: [] as string[], text: "Dark chrome", evidence_count: 2, quotes: [], enabled: false, proposed_by: null, created_at: "", updated_at: "" },
   ];
 
   test("is listed and the ask description points at it", () => {
@@ -224,5 +225,177 @@ describe("project RPCs", () => {
     } finally {
       client.close();
     }
+  });
+
+  test("WAG-419: list with no scope, evidence, add, update and set_scope over the socket", async () => {
+    const home = tmpHome();
+    homes.push(home);
+    const store = new Store(new Database(join(home, "knock.db")), home, new EventBus());
+    const task = store.createTask({ name: "w", project: "waggle" });
+    const socketPath = join(home, "knock.sock");
+    servers.push(startRpcServer({ socketPath, store, bus: new EventBus(), version: pkg.version }));
+    const raw = await rpcConnect(socketPath);
+    const call = async (method: string, params: unknown) => {
+      const res = await raw.request(method, params);
+      if (res.error) throw new Error(String(res.error.message));
+      return res.result;
+    };
+    try {
+      const c1 = store.createCase(task.id, ask("Layout?")).id;
+      decide(store, c1, { choice: "b" });
+      store.projects.propose("waggle", null, [{ text: "Local rule", evidence_count: 2, quotes: [], case_ids: [c1] }]);
+      const added = (await call("preference.add", { text: "Be brief" })) as { id: string; scope: string };
+      expect(added.scope).toBe("all");
+      const inProject = (await call("preference.add", { text: "Use tabs", project: "waggle" })) as { scope: string };
+      expect(inProject.scope).toBe("project");
+      const list = (await call("preference.list", {})) as { items: { id: string; text: string }[]; projects: string[] };
+      expect(list.items.map((t) => t.text)).toEqual(["Be brief", "Local rule", "Use tabs"]);
+      expect(list.projects).toEqual(["waggle"]);
+      const local = list.items[1]!;
+      expect(await call("preference.evidence", { id: local.id })).toEqual({
+        items: [{ case_id: c1, question: "Layout?", did: "Picked Detailed." }],
+        project: "waggle",
+      });
+      const upd = (await call("preference.update", { id: local.id, text: "Local words" })) as { text: string };
+      expect(upd.text).toBe("Local words");
+      const moved = (await call("preference.set_scope", { id: local.id, scope: "all" })) as { scope: string; project: string | null };
+      expect(moved).toMatchObject({ scope: "all" });
+      await expect(call("preference.set_scope", { id: local.id, scope: "project" })).rejects.toBeDefined();
+      await expect(call("preference.update", { id: "nope", text: "x" })).rejects.toBeDefined();
+      await expect(call("preference.update", { id: local.id, text: "   " })).rejects.toBeDefined();
+      await expect(call("preference.evidence", { id: "nope" })).rejects.toBeDefined();
+      await expect(call("preference.add", { text: "" })).rejects.toBeDefined();
+    } finally {
+      raw.close();
+    }
+  });
+
+  test("scope all: propose, list, toggle and rules over the socket", async () => {
+    const home = tmpHome();
+    homes.push(home);
+    const store = new Store(new Database(join(home, "knock.db")), home, new EventBus());
+    const task = store.createTask({ name: "w", project: "waggle" });
+    store.createSession(task.id, { id: "sess-1", cwd: "/work", branch: null, pid: 4242 });
+    const socketPath = join(home, "knock.sock");
+    servers.push(startRpcServer({ socketPath, store, bus: new EventBus(), version: pkg.version }));
+    const raw = await rpcConnect(socketPath);
+    const call = async (method: string, params: unknown) => {
+      const res = await raw.request(method, params);
+      if (res.error) throw new Error(String(res.error.message));
+      return res.result;
+    };
+    try {
+      const prop = (await call("knock_themes", {
+        session_id: "sess-1",
+        action: "propose",
+        themes: [
+          { text: "Local rule", evidence_count: 1, quotes: [] },
+          { text: "Global rule", evidence_count: 3, quotes: ["q"], case_ids: ["c_1"], scope: "all" },
+        ],
+      })) as { added: { id: string; scope: string }[] };
+      expect(prop.added.map((t) => t.scope)).toEqual(["project", "all"]);
+      const all = (await call("preference.list", { scope: "all" })) as { items: { id: string; case_ids: string[] }[] };
+      expect(all.items).toHaveLength(1);
+      expect(all.items[0]!.case_ids).toEqual(["c_1"]);
+      const proj = (await call("preference.list", { scope: "project", project: "waggle" })) as { items: { text: string }[] };
+      expect(proj.items.map((t) => t.text)).toEqual(["Local rule"]);
+      await expect(call("preference.list", { scope: "project" })).rejects.toBeDefined();
+      expect(await call("preference.rules", { session_id: "sess-1" })).toEqual({ all: ["Global rule"], project: ["Local rule"] });
+      await call("project.theme_toggle", { id: all.items[0]!.id, enabled: false });
+      expect(await call("preference.rules", { session_id: "sess-1" })).toEqual({ all: [], project: ["Local rule"] });
+      expect(await call("preference.rules", { session_id: "unknown" })).toEqual({ all: [], project: [] });
+    } finally {
+      raw.close();
+    }
+  });
+});
+
+// WAG-417: the learning trigger. 5 new corrections make the project guide ask for rules.
+describe("corrections trigger", () => {
+  function fixDecisions(store: Store, task: { id: string }, n: number, choice: string, tag = "Q") {
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const c = store.createCase(task.id, ask(`${tag}${i}?`)).id;
+      decide(store, c, { choice });
+      ids.push(c);
+    }
+    return ids;
+  }
+  const guideOf = (store: Store) =>
+    projectGuide({
+      project: "waggle",
+      decisions: [],
+      themes: [],
+      repoRecords: false,
+      stale: false,
+      comments: [],
+      correctionsDue: store.projects.correctionsDue("waggle"),
+      corrections: store.projects.correctedAsks("waggle"),
+    });
+
+  test("the constant is 5; no trigger at 4, trigger at 5", () => {
+    const { store, task } = setup();
+    expect(CORRECTION_TRIGGER_COUNT).toBe(5);
+    fixDecisions(store, task, 4, "b");
+    expect(store.projects.newCorrectionCount("waggle")).toBe(4);
+    expect(guideOf(store)).not.toContain("Propose rules from the corrections");
+    fixDecisions(store, task, 1, "b", "Extra");
+    expect(store.projects.correctionsDue("waggle")).toBe(true);
+    const text = guideOf(store);
+    expect(text).toContain("Propose rules from the corrections");
+    expect(text).toContain("case_ids");
+    expect(text).toContain("WRONG:");
+  });
+
+  test("accepted recommendations are not corrections", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 6, "a");
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+  });
+
+  test("another project does not count", () => {
+    const { store } = setup();
+    const other = store.createTask({ name: "other", project: "elsewhere" });
+    fixDecisions(store, other, 6, "b");
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+  });
+
+  test("the list: newest first, question, recommendation and what the person did", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 4, "b");
+    const c = store.createCase(task.id, ask("Last one?")).id;
+    decide(store, c, { choice: "b", message: "Too busy" });
+    const list = store.projects.correctedAsks("waggle");
+    expect(list).toHaveLength(5);
+    expect(list[0]).toMatchObject({ case_id: c, question: "Last one?", recommended: "Compact" });
+    expect(list[0]!.outcome).toBe("picked Detailed; wrote: Too busy");
+    expect(list[4]!.question).toBe("Q0?");
+    const text = guideOf(store);
+    expect(text).toContain(`1. [${c}] Last one? You recommended: Compact. The person: picked Detailed; wrote: Too busy.`);
+  });
+
+  test("the list holds 20 asks at most", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 25, "b");
+    const list = store.projects.correctedAsks("waggle");
+    expect(list).toHaveLength(GUIDE_CORRECTION_COUNT);
+    expect(list[0]!.question).toBe("Q24?");
+    expect(store.projects.newCorrectionCount("waggle")).toBe(25);
+  });
+
+  test("a proposal restarts the counter", () => {
+    const { store, task } = setup();
+    fixDecisions(store, task, 5, "b");
+    expect(store.projects.correctionsDue("waggle")).toBe(true);
+    store.projects.propose("waggle", "sess-1", [{ text: "T", evidence_count: 1, quotes: [] }], new Date(Date.now() + 1000).toISOString());
+    expect(store.projects.newCorrectionCount("waggle")).toBe(0);
+    expect(store.projects.correctionsDue("waggle")).toBe(false);
+    expect(store.projects.correctedAsks("waggle")).toHaveLength(0);
+  });
+
+  test("the comment trigger still works on its own", () => {
+    const text = projectGuide({ project: "waggle", decisions: [], themes: [], repoRecords: false, stale: true, comments: ["Use plain words"] } as never);
+    expect(text).toContain("Propose themes");
+    expect(text).not.toContain("Propose rules from the corrections");
   });
 });
