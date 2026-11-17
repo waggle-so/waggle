@@ -143,14 +143,10 @@ struct RoundHeadingView: View {
     @Environment(\.roundTagInEyebrow) private var roundTagInEyebrow
 
     var body: some View {
-        let split = TitleSplit.make(heading.title)
         VStack(alignment: .leading, spacing: 4) {
             // `.ctx`: margin-bottom 10.
             if !roundTagInEyebrow { RoundTagView(text: heading.tag).padding(.bottom, 6) }
-            TitleText(text: split.title, style: titleStyle)
-            if let description = split.description {
-                TitleDescriptionView(text: description)
-            }
+            SplitTitleView(text: heading.title, style: titleStyle)
             if let earlier = heading.earlier {
                 RoundFoldView(entries: [earlier]).padding(.top, 6)
             } else {
