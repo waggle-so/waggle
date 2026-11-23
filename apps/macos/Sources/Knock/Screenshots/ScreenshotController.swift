@@ -184,11 +184,7 @@ final class ScreenshotController {
             onTurnOff: { [weak self] in
                 ScreenshotSettings.setMode(.off, defaults: self?.defaults ?? .standard)
             })
-        let host = NSHostingView(rootView: view)
-        let size = host.fittingSize
-        // Measure first, then keep that size: with the default sizing options the hosting view also resizes the
-        // window, and the two can fight over a fraction of a point until AppKit throws (crash on 0.2.72).
-        host.sizingOptions = []
+        let (host, size) = Self.fixedHost(view)
         let panel = makePanel(content: host, size: size)
         let screen = Self.screen()
         panel.setFrameOrigin(ScreenshotGeometry.badgeOrigin(screen: screen.visibleFrame, size: size))
@@ -343,11 +339,7 @@ final class ScreenshotController {
         closePanel()
         noticeText = text
         guard showsWindows else { return }
-        let host = NSHostingView(rootView: ScreenshotNoticeView(text: text))
-        let size = host.fittingSize
-        // Measure first, then keep that size: with the default sizing options the hosting view also resizes the
-        // window, and the two can fight over a fraction of a point until AppKit throws (crash on 0.2.72).
-        host.sizingOptions = []
+        let (host, size) = Self.fixedHost(ScreenshotNoticeView(text: text))
         let panel = makePanel(content: host, size: size)
         panel.setFrameOrigin(ScreenshotGeometry.shortcutPanelOrigin(screen: Self.screen().visibleFrame, size: size))
         panel.orderFrontRegardless()
@@ -371,6 +363,24 @@ final class ScreenshotController {
         panel.isReleasedWhenClosed = false
         panel.contentView = content
         return panel
+    }
+
+    /// The view of a panel whose size never changes: the badge and the one-line notice. It is measured once,
+    /// rounded up to whole points, and put inside a plain container view. When an `NSHostingView` is the window's
+    /// own content view, SwiftUI also sizes the window (`updateWindowContentSizeExtremaIfNecessary`) in every
+    /// constraints pass, and turning its sizing options off did not stop that: 0.2.72 crashed twice and 0.2.73
+    /// once (22 Nov) in a resize loop that AppKit ended with an exception. Inside a container, SwiftUI only lays
+    /// out the badge and never touches the panel.
+    static func fixedHost<Content: View>(_ view: Content) -> (NSView, CGSize) {
+        let host = NSHostingView(rootView: view)
+        let fit = host.fittingSize
+        host.sizingOptions = []
+        let size = CGSize(width: ceil(fit.width), height: ceil(fit.height))
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        host.frame = container.bounds
+        host.autoresizingMask = [.width, .height]
+        container.addSubview(host)
+        return (container, size)
     }
 
     private static func screen() -> NSScreen { NSScreen.main ?? NSScreen.screens[0] }
