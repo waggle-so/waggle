@@ -197,6 +197,18 @@ right
     waggle_ask({ ..., title: "Speed up the fleet: which fixes should I make?",
                  replaces: "c_01J..." })
 
+## A held ask: past decisions fit
+
+Before it makes a case, Waggle looks in this project for decisions the human already made on the same question. If some fit, the
+first waggle_ask creates no case. It returns `status: "held"` with up to 3 matches (case_id, question, pick, why, date).
+The human was not asked. Do one of three things:
+
+1. Drop the ask and follow the past decision.
+2. Send a better ask with waggle_ask. Name the old decision and say what is new.
+3. Send the same ask again with the same title. Waggle then creates the case and keeps the matched case ids.
+
+A review, an ask with `replaces` or `follows` is never held.
+
 ## sources: show where a claim comes from
 
 Cite what you read. Send `sources` (up to 24) with the ask or the update. Put `[[s:id]]` after the

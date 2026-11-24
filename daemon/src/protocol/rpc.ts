@@ -488,6 +488,28 @@ export const CasesResolvedStatsResult = z.object({
 });
 export type CasesResolvedStatsResult = z.infer<typeof CasesResolvedStatsResult>;
 
+// stats.corrections (WAG-414): corrections per ask, by ISO week. A correction is a deciding reply the person did
+// not just accept (docs/protocol-mvp.md, "Corrections"). Without `project` every project counts; with it, one
+// project (the tasks.project tag). The last `weeks` weeks, oldest first, a week with no asks included.
+export const StatsCorrectionsParams = z.object({
+  project: z.string().min(1).optional(),
+  weeks: z.number().int().min(1).max(104).default(12),
+});
+export type StatsCorrectionsParams = z.infer<typeof StatsCorrectionsParams>;
+export const CorrectionWeek = z.object({
+  week: z.string().regex(/^\d{4}-W\d{2}$/),
+  starts: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  asks: z.number().int().nonnegative(),
+  corrections: z.number().int().nonnegative(),
+  per_ask: z.number().nonnegative().nullable(),
+});
+export type CorrectionWeek = z.infer<typeof CorrectionWeek>;
+export const StatsCorrectionsResult = z.object({
+  project: z.string().optional(),
+  weeks: z.array(CorrectionWeek),
+});
+export type StatsCorrectionsResult = z.infer<typeof StatsCorrectionsResult>;
+
 // cases.purge_resolved (HAIL-52): deletes every resolved case - its messages,
 // replies, comments, captures and revisions, then its staged bundle
 // directories and any blob no surviving case's revision still references
@@ -599,7 +621,12 @@ export type SessionHelloResult = z.infer<typeof SessionHelloResult>;
 // KnockAskInput, so the agent never sees it in the tool schema.
 export const CaseCreateParams = z.intersection(
   KnockAskInput,
-  z.object({ client_request_id: z.string().min(8).max(100).optional() }),
+  z.object({
+    client_request_id: z.string().min(8).max(100).optional(),
+    // WAG-416: the shim says it can show a hold (below). Without it the daemon never holds an ask, so an older
+    // shim keeps working against this daemon. Not part of the agent's tool schema.
+    accepts_hold: z.boolean().optional(),
+  }),
 );
 export type CaseCreateParams = z.infer<typeof CaseCreateParams>;
 export const CaseCreateResult = Case.extend({
@@ -607,6 +634,23 @@ export const CaseCreateResult = Case.extend({
   words_warning: z.string().nullable(),
 });
 export type CaseCreateResult = z.infer<typeof CaseCreateResult>;
+
+// WAG-416: the other answer of case.create. A decision ask that fits past decisions of its project is held once:
+// no case is created. `matches` holds up to 3 strong matches, best first. The same ask sent again (same session and
+// title, within 15 minutes) creates the case, and the case stores these ids as `matched_case_ids`.
+export const DecidedMatch = z.object({
+  case_id: z.string(),
+  question: z.string(),
+  pick: z.string(),
+  why: z.string(),
+  date: z.string(),
+});
+export type DecidedMatch = z.infer<typeof DecidedMatch>;
+export const CaseHoldResult = z.object({
+  held: z.literal(true),
+  matches: z.array(DecidedMatch).min(1).max(3),
+});
+export type CaseHoldResult = z.infer<typeof CaseHoldResult>;
 
 // case.wait: same wait and return shape as waggle_ask / waggle_check. The reply
 // payload carries its reply_id so the shim can acknowledge it afterwards.
@@ -1031,11 +1075,15 @@ export const ProjectDecision = z.object({
   option_count: z.number().int().nonnegative(),
   artifact_kind: z.string().nullable(),
 });
+export const PreferenceScope = z.enum(["project", "all"]);
 export const ProjectTheme = z.object({
   id: z.string(),
+  scope: PreferenceScope,
+  project: z.string().nullable(),
   text: z.string(),
   evidence_count: z.number().int().nonnegative(),
   quotes: z.array(z.string()),
+  case_ids: z.array(z.string()),
   enabled: z.boolean(),
   proposed_by: z.string().nullable(),
   created_at: z.string(),
@@ -1048,6 +1096,37 @@ export const ProjectDecisionsParams = z.object({
 });
 export const ProjectDecisionsResult = z.object({ items: z.array(ProjectDecision), total: z.number().int() });
 export const ProjectGetParams = z.object({ project: z.string() });
+// preference.list: the preferences of one scope. Scope project needs the project name.
+// With no scope it lists every preference (scope all first, then project rules grouped by project) and
+// adds the known project names: the Settings list reads that.
+export const PreferenceListParams = z.object({ scope: PreferenceScope.optional(), project: z.string().optional() });
+export type PreferenceListParams = z.infer<typeof PreferenceListParams>;
+// preference.rules: the rule text for the connect text of a session. Text only.
+export const PreferenceRulesParams = z.object({ session_id: z.string() });
+export type PreferenceRulesParams = z.infer<typeof PreferenceRulesParams>;
+export const PreferenceRulesResult = z.object({ all: z.array(z.string()), project: z.array(z.string()) });
+export type PreferenceRulesResult = z.infer<typeof PreferenceRulesResult>;
+// preference.evidence: the evidence lines of one rule (the case question and what the person did).
+export const PreferenceEvidenceParams = z.object({ id: z.string() });
+export type PreferenceEvidenceParams = z.infer<typeof PreferenceEvidenceParams>;
+export const PreferenceEvidenceResult = z.object({
+  items: z.array(z.object({ case_id: z.string(), question: z.string(), did: z.string() })),
+  project: z.string().nullable(),
+});
+export type PreferenceEvidenceResult = z.infer<typeof PreferenceEvidenceResult>;
+// preference.add: a rule written by hand. Scope all unless a project is given.
+export const PreferenceAddParams = z.object({ text: z.string().trim().min(1), project: z.string().trim().min(1).optional() });
+export type PreferenceAddParams = z.infer<typeof PreferenceAddParams>;
+// preference.update: the new text of a rule.
+export const PreferenceUpdateParams = z.object({ id: z.string(), text: z.string().trim().min(1) });
+export type PreferenceUpdateParams = z.infer<typeof PreferenceUpdateParams>;
+// preference.set_scope: a rule for every project (scope all) or for one project (scope project needs it).
+export const PreferenceSetScopeParams = z.object({
+  id: z.string(),
+  scope: PreferenceScope,
+  project: z.string().trim().min(1).optional(),
+});
+export type PreferenceSetScopeParams = z.infer<typeof PreferenceSetScopeParams>;
 export const ProjectThemeToggleParams = z.object({ id: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsParams = z.object({ project: z.string(), enabled: z.boolean() });
 export const ProjectRepoRecordsResult = z.object({ project: z.string(), repo_records: z.boolean() });
